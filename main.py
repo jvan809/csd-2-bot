@@ -26,14 +26,23 @@ def run_game_loop(config_manager: ConfigManager):
     key_delay = config_manager.get_setting("bot_settings.key_delay", default=0.05)
     page_delay = config_manager.get_setting("bot_settings.page_delay", default=0.25)
     
-          
     # --- 2. Wait for Recipe ---
     log.info("Waiting for a new recipe...")
+    trigger_config = config_manager.get_setting("bot_settings.recipe_trigger")
+    trigger_x = trigger_config.get("check_pixel_x")
+    trigger_y = trigger_config.get("check_pixel_y")
+    expected_color = tuple(trigger_config.get("expected_color_rgb"))
+    tolerance = trigger_config.get("tolerance", 10)
+
+    while not pyautogui.pixelMatchesColor(trigger_x, trigger_y, expected_color, tolerance=tolerance):
+        pyautogui.sleep(loop_delay) # Wait before trying again
+
+    log.info(f"Recipe trigger detected at ({trigger_x}, {trigger_y}). Reading recipe...")
     remaining_steps = []
-    while not remaining_steps:
-        remaining_steps = process_recipe_list_roi(recipe_roi)
-        if not remaining_steps:
-            pyautogui.sleep(loop_delay) # Wait before trying again
+    remaining_steps = process_recipe_list_roi(recipe_roi)
+    if not remaining_steps:
+        log.warning("Recipe card detected, but failed to read any recipe text. Skipping this attempt.")
+        return
 
     log.info(f"New recipe detected! Steps: {remaining_steps}")
 

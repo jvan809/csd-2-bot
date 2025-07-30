@@ -29,6 +29,12 @@ class ConfigManager:
                     "min_aspect_ratio": 2.0,
                     "horizontal_gap_threshold": 30
                 },
+                "recipe_trigger": {
+                    "check_pixel_x": 462,
+                    "check_pixel_y": 977,
+                    "expected_color_rgb": [54, 54, 54],
+                    "tolerance": 10
+                },
                 "min_confidence": 50,
                 "logging_level": "INFO",
                 "main_loop_delay": 1.0,
