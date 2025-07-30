@@ -1,29 +1,33 @@
 {
     "ocr_regions": {
-        "current_recipe_name": {
-            "top": 0,
-            "left": 0,
-            "width": 0,
-            "height": 0
+        "recipe_list_roi": {
+            "left": 452,
+            "top": 884,
+            "width": 1012,
+            "height": 97
         },
-        "current_ingredients": {
-            "top": 0,
-            "left": 0,
-            "width": 0,
-            "height": 0
+        "ingredient_panel_roi": {
+            "left": 1610,
+            "top": 146,
+            "width": 305,
+            "height": 364
         }
     },
     "bot_settings": {
         "tesseract_path": "C:/Program Files/Tesseract-OCR/tesseract.exe",
         "enable_failsafe": true,
+        "logging_level": "INFO",
         "panel_detection": {
             "threshold_value": 245,
             "min_area": 1000,
             "min_aspect_ratio": 2.0,
             "horizontal_gap_threshold": 30
-        }
+        },
+        "min_confidence": 50,
+        "main_loop_delay": 1.0,
+        "key_delay": 0.05,
+        "page_delay": 0.25
     },
-
     "controls": {
         "input_keys": [
             "A",
@@ -35,6 +39,7 @@
             "C",
             "V"
         ],
-        "confirm_key": "Enter"
+        "confirm_key": "enter",
+        "page_turn_key": "space"
     }
 }

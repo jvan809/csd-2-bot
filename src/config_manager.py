@@ -16,9 +16,9 @@ class ConfigManager:
     def _get_default_config(self) -> dict:
         """Returns the default configuration structure."""
         return {
-            "ocr_regions": {
-                "current_recipe_name": {"top": 0, "left": 0, "width": 0, "height": 0},
-                "current_ingredients": {"top": 0, "left": 0, "width": 0, "height": 0}
+            "ocr_regions": { # This structure is updated by setup.py or manual config
+                "recipe_list_roi": {"top": 0, "left": 0, "width": 0, "height": 0},
+                "ingredient_panel_roi": {"top": 0, "left": 0, "width": 0, "height": 0}
             },
             "bot_settings": {
                 "tesseract_path": "C:/Program Files/Tesseract-OCR/tesseract.exe",
@@ -28,12 +28,18 @@ class ConfigManager:
                     "min_area": 1000,
                     "min_aspect_ratio": 2.0,
                     "horizontal_gap_threshold": 30
-                }
+                },
+                "min_confidence": 50,
+                "logging_level": "INFO",
+                "main_loop_delay": 1.0,
+                "key_delay": 0.05,
+                "page_delay": 0.25
             },
             
             "controls": {
                 "input_keys": ["A", "S", "D", "F", "Z", "X", "C", "V"],
-                "confirm_key": "Enter"
+                "confirm_key": "enter",
+                "page_turn_key": "space"
             }
         }
 

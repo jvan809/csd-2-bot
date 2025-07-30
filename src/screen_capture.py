@@ -15,7 +15,7 @@ def capture_region(roi: dict) -> np.ndarray | None:
             sct_img = sct.grab(roi)
             # Convert to a NumPy array
             img = np.array(sct_img) # BGRA format
-            log.info(f"Captured screen region at {roi}")
+            log.debug(f"Captured screen region at {roi}")
             return img
     except mss.exception.ScreenShotError as e:
         log.error(f"Failed to capture screen region at {roi}: {e}")

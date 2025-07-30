@@ -19,6 +19,7 @@ This plan outlines the implementation steps for creating the Minimum Viable Prod
 - **REQ-004**: The bot shall emulate keyboard presses corresponding to the identified ingredients and cooking actions.
 - **REQ-005**: The bot shall log its actions (e.g., recipe identified, keys pressed, errors).
 - **REQ-006**: The bot shall support handling all ~200 foods in the game with minimal hardcoding of specific recipes.
+- **REQ-008**: The bot must execute ingredient key presses in the order specified by the recipe, not the order they appear on the screen.
 - **REQ-007**: The project shall include a `README.md` file with clear setup and usage instructions.
 - **CON-001**: The game does not provide a public API for programmatic interaction.
 - **CON-002**: OCR must be resilient to different game window sizes.
@@ -28,6 +29,8 @@ This plan outlines the implementation steps for creating the Minimum Viable Prod
 - **GUD-002**: Use `pyautogui`'s mouse-based failsafe as a "panic button" to stop bot operation.
 - **GUD-003**: Favor a modular design where screen reading, decision logic, and input emulation are separated.
 - **GUD-004**: Abstract external library calls for screen capture and key presses into wrapper functions.
+- **GUD-005**: To prevent infinite loops, the bot shall attempt a maximum of three pages of ingredients per recipe (one initial view plus two page-turns).
+- **GUD-006**: If the initial OCR of a recipe fails (i.e., no text is found), the bot should enter a retry loop, attempting to read the screen again after a short delay until successful.
 
 ## 2. Implementation Steps
 
@@ -66,11 +69,11 @@ This plan outlines the implementation steps for creating the Minimum Viable Prod
 
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
-| TASK-016 | Create `src/bot_logic.py`. | | |
-| TASK-017 | In `src/bot_logic.py`, implement `map_ingredients_to_keys(required_ingredients, available_ingredients, key_map)` to determine the correct sequence of key presses. | | |
-| TASK-018 | Create `tests/test_bot_logic.py` to unit test the decision-making module. | | |
-| TASK-019 | In `test_bot_logic.py`, write unit tests for `map_ingredients_to_keys` with mock data to ensure correct key sequences are generated. | | |
-| TASK-020 | In `main.py`, implement the main loop to: capture the main ingredient panel ROI, pass it to `find_ingredient_boxes`, process each resulting box with OCR, pass the results to `bot_logic`, and execute keystrokes via `input_handler`. | | |
+| TASK-016 | Create `src/bot_logic.py`. | X | 2025-07-30 |
+| TASK-017 | In `src/bot_logic.py`, implement `map_ingredients_to_keys(remaining_steps, available_on_page, input_keys)`. The function must iterate through `remaining_steps` in order, find a perfect match in `available_on_page`, and map it to the correct keys from `input_keys` based on the available ingredient's position. It should return the sequence of keys to press and the list of matched ingredients. | X | 2025-07-30 |
+| TASK-018 | Create `tests/test_bot_logic.py` to unit test the decision-making module. | X | 2025-07-30 |
+| TASK-019 | In `test_bot_logic.py`, write unit tests for `map_ingredients_to_keys` with mock data to ensure correct key sequences are generated. | X | 2025-07-30 |
+| TASK-020 | In `main.py`, implement the main gameplay loop. The sequence should be: <br>1. **Load Config**: Load all ROIs (`recipe_list_roi`, `ingredient_panel_roi`) and control keys (`input_keys`, `page_turn_key`, `confirm_key`) from `config.json`. <br>2. **Wait for Recipe**: Start a retry loop (per `GUD-006`) to capture the `recipe_list_roi` and use OCR to get the full list of `remaining_steps`. <br>3. **Ingredient Page Loop**: While `remaining_steps` is not empty (and page turns < 2): <br>   a. Capture the `ingredient_panel_roi` and get the `available_on_page`. <br>   b. Call `map_ingredients_to_keys` to get keys to press and matched ingredients. <br>   c. Execute key presses and update `remaining_steps`. <br>   d. If steps remain, press the page-turn key and increment a counter. <br>4. **Serve Order**: Once the loop is complete, press the confirm/serve key. | X | 2025-07-30 |
 | TASK-021 | Integrate the logger throughout the application to log key decisions, actions, and errors. | | |
 
 ### Implementation Phase 4: Calibration & Setup
@@ -80,8 +83,8 @@ This plan outlines the implementation steps for creating the Minimum Viable Prod
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
 | TASK-022 | Create a `setup.py` script in the root directory. The script should instruct the user to have the game open and visible. | | |
-| TASK-023 | In `setup.py`, implement logic using `cv2.matchTemplate` to locate reference UI elements on screen from images in `/assets/templates`. | | |
-| TASK-024 | In `setup.py`, implement logic to calculate the absolute coordinates for `current_recipe_name` and `current_ingredients` ROIs based on the found reference elements. | | |
+| TASK-023 | In `setup.py`, implement logic using `cv2.matchTemplate` to locate reference UI elements on screen from images in `/assets/templates`. |X| |
+| TASK-024 | In `setup.py`, implement logic to calculate the absolute coordinates for all gameplay ROIs (e.g., required ingredients list, available ingredients panel) based on the found reference elements. | | |
 | TASK-025 | In `setup.py`, use the `config_manager` to write the calculated ROI coordinates into `config.json`. | | |
 | TASK-026 | Create `tests/test_setup.py` to unit test the calibration logic. | | |
 | TASK-027 | In `test_setup.py`, write tests to verify template matching on fixture images and confirm correct `config.json` updates. | | |
@@ -131,6 +134,7 @@ This plan outlines the implementation steps for creating the Minimum Viable Prod
 - **RISK-004**: The manual setup process (installing Python, Tesseract, and packages) may be too complex for non-technical users, hindering adoption.
 - **ASSUMPTION-001**: The performance of the capture -> process -> input pipeline in Python will be fast enough to meet the game's real-time demands.
 - **ASSUMPTION-002**: The geometric relationship between reference UI elements and the OCR regions is constant across all supported resolutions.
+- **ASSUMPTION-003**: For the MVP, OCR text for required and available ingredients will match perfectly. Fuzzy matching is not required.
 
 ## 8. Related Specifications / Further Reading
 

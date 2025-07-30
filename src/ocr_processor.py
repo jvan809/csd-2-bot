@@ -4,20 +4,21 @@ import numpy as np
 import logging
 from pytesseract import Output
 from src.config_manager import ConfigManager
+from src.screen_capture import capture_region
 
 log = logging.getLogger('csd2_bot')
 
-# --- Tesseract Configuration ---
-# This configuration is done once when the module is imported.
-try:
-    config = ConfigManager()
-    tesseract_path = config.get_setting("bot_settings.tesseract_path")
-    if tesseract_path:
-        pytesseract.pytesseract.tesseract_cmd = tesseract_path
-    log.info(f"Tesseract path set to: {pytesseract.pytesseract.tesseract_cmd}")
-except Exception as e:
-    log.error(f"Could not set Tesseract path from config. Ensure it's in your system PATH. Error: {e}")
-# ---
+config = ConfigManager()
+
+def configure_tesseract():
+    """Sets the Tesseract command path from the config file."""
+    try:
+        tesseract_path = config.get_setting("bot_settings.tesseract_path")
+        if tesseract_path:
+            pytesseract.pytesseract.tesseract_cmd = tesseract_path
+        log.info(f"Tesseract path set to: {pytesseract.pytesseract.tesseract_cmd}")
+    except Exception as e:
+        log.error(f"Could not set Tesseract path from config. Ensure it's in your system PATH. Error: {e}")
 
 def normalize_image(image: np.ndarray) -> np.ndarray:
     """
@@ -45,7 +46,7 @@ def normalize_image(image: np.ndarray) -> np.ndarray:
         
     padded_image = cv2.copyMakeBorder(resized_image, padding, padding, padding, padding, cv2.BORDER_CONSTANT, value=border_color)
     
-    log.info("Image normalized with resizing and padding.")
+    log.debug("Image normalized with resizing and padding.")
     return padded_image
 
 def binarize_image(image: np.ndarray, invert_colors: bool = False) -> np.ndarray | None:
@@ -79,7 +80,7 @@ def binarize_image(image: np.ndarray, invert_colors: bool = False) -> np.ndarray
     threshold_type = cv2.THRESH_BINARY_INV if invert_colors else cv2.THRESH_BINARY
     _, processed_image = cv2.threshold(gray, 0, 255, threshold_type + cv2.THRESH_OTSU)
 
-    log.info(f"Image binarized for OCR. Inverted colors: {invert_colors}")
+    log.debug(f"Image binarized for OCR. Inverted colors: {invert_colors}")
     return processed_image
 
 def find_ingredient_boxes(panel_image: np.ndarray) -> list[tuple[tuple[int, int, int, int], np.ndarray]]:
@@ -174,7 +175,7 @@ def extract_text_from_image(image: np.ndarray, psm: int = 7) -> dict:
         custom_config = f'--oem 3 --psm {psm}'
 
         data = pytesseract.image_to_data(image, config=custom_config, output_type=Output.DICT)
-        log.info(f"Extracted structured text data with {len(data.get('text', []))} potential words.")
+        log.debug(f"Extracted structured text data with {len(data.get('text', []))} potential words.")
         return data
     except pytesseract.TesseractNotFoundError:
         log.error("Tesseract executable not found. Ensure it is installed and the path is configured correctly.")
@@ -207,7 +208,7 @@ def parse_single_phrase(ocr_data: dict, min_confidence: int = 50) -> str:
                 words.append(text)
 
     result = " ".join(words)
-    log.info(f"Parsed single phrase with min confidence {min_confidence}: '{result}'")
+    log.debug(f"Parsed single phrase with min confidence {min_confidence}: '{result}'")
     return result
 
 def parse_ingredient_list(ocr_data: dict, min_confidence: int = 50) -> list[str]:
@@ -265,3 +266,55 @@ def parse_ingredient_list(ocr_data: dict, min_confidence: int = 50) -> list[str]
 
     log.info(f"Parsed ingredient list with min confidence {min_confidence}: {ingredients}")
     return ingredients
+
+
+def process_recipe_list_roi(roi: dict) -> list[str]:
+    """
+    Captures and OCRs the recipe list region, returning a list of required steps.
+    This is a high-level function that orchestrates the full pipeline.
+    """
+    image_cv = capture_region(roi)  # Returns a BGRA numpy array
+    if image_cv is None:
+        return []
+
+    # Recipe list has light text on a dark background, so inversion is needed.
+    processed_image = binarize_image(image_cv, invert_colors=True)
+    if processed_image is None or processed_image.size == 0:
+        return []
+
+    # Use PSM 6 for a single uniform block of text.
+    ocr_data = extract_text_from_image(processed_image, psm=6)
+    min_conf = config.get_setting("bot_settings.min_confidence", default=50)
+    return parse_ingredient_list(ocr_data, min_confidence=min_conf)
+
+
+def process_ingredient_panel_roi(roi: dict) -> list[str]:
+    """
+    Captures and OCRs the ingredient panel, returning a list of available ingredients.
+    This is a high-level function that orchestrates the full pipeline.
+    """
+    image_cv = capture_region(roi)  # Returns a BGRA numpy array
+    if image_cv is None:
+        return []
+
+    all_parsed_phrases = []
+    boxes_and_contours = find_ingredient_boxes(image_cv)
+    if not boxes_and_contours:
+        return []
+
+    panel_images = crop_image_by_boxes(image_cv, boxes_and_contours)
+
+    for item_image in panel_images:
+        normalized_img = normalize_image(item_image)
+        # Ingredient panel has light text on a dark background, so inversion is needed.
+        processed_image = binarize_image(normalized_img, invert_colors=True)
+        if processed_image is None or processed_image.size == 0:
+            continue
+
+        ocr_data = extract_text_from_image(processed_image, psm=7)
+        min_conf = config.get_setting("bot_settings.min_confidence", default=50)
+        parsed_phrase = parse_single_phrase(ocr_data, min_confidence=min_conf)
+        if parsed_phrase:
+            all_parsed_phrases.append(parsed_phrase)
+
+    return all_parsed_phrases

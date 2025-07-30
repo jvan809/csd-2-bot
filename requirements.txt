@@ -3,6 +3,7 @@ Pillow
 opencv-python
 pytesseract
 pyautogui
+pydirectinput
 
 # -- Testing --
 pytest
