@@ -1,0 +1,129 @@
+import pytest
+import cv2
+import numpy as np
+from pathlib import Path
+import sys
+
+# Add project root to Python path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from src.screen_capture import capture_region
+from src.ocr_processor import (
+    find_ingredient_boxes,
+    crop_image_by_boxes,
+    normalize_image,
+    binarize_image,
+    extract_text_from_image,
+    parse_single_phrase,
+    parse_ingredient_list,
+)
+
+# --- Test Configuration ---
+# This is a manual integration test. It requires the game to be running and visible.
+# It is skipped by default to prevent it from running in an automated test environment.
+# To run this test:
+# 1. Open the game and go to a level where the ingredient panel is visible.
+# 2. Update the `MANUAL_INGREDIENT_PANEL_ROI` with the correct pixel coordinates for your screen.
+#    You can use a screenshot tool (like Windows Snipping Tool or ShareX) to find these coordinates.
+# 3. Comment out or remove the `@pytest.mark.skip` line below.
+# 4. Run pytest from your terminal: `pytest tests/test_manual_integration.py -s` (the -s flag shows print output)
+
+MANUAL_INGREDIENT_PANEL_ROI = {
+    "left": 1610,  # X coordinate of the top-left corner
+    "top": 146,    # Y coordinate of the top-left corner
+    "width": 305,  # Width of the region
+    "height": 364, # Height of the region
+}
+
+# uncommet skip and use VV to run
+# pytest tests/test_manual_integration.py -s 
+@pytest.mark.skip(reason="Manual test: requires game to be running and ROI to be configured.")
+def test_live_ocr_on_ingredient_panel():
+    """
+    Captures the ingredient panel from a live game screen, processes it with OCR,
+    and prints the results for manual verification.
+    """
+    print("\n--- Starting Live OCR Test ---")
+    print(f"Capturing region: {MANUAL_INGREDIENT_PANEL_ROI}")
+
+    # 1. Capture the screen region using the manual coordinates
+    panel_image_pil = capture_region(MANUAL_INGREDIENT_PANEL_ROI)
+    assert panel_image_pil is not None, "Screen capture failed. Is the region valid?"
+
+    # Convert to OpenCV format
+    panel_image_cv = cv2.cvtColor(np.array(panel_image_pil), cv2.COLOR_RGB2BGR)
+
+    # 2. Process the captured image using the OCR pipeline
+    all_parsed_phrases = []
+    boxes_and_contours = find_ingredient_boxes(panel_image_cv)
+
+    if not boxes_and_contours:
+        pytest.fail("No ingredient boxes were found in the captured region. Check ROI or in-game screen.")
+
+    print(f"Found {len(boxes_and_contours)} potential ingredient boxes.")
+    panel_images = crop_image_by_boxes(panel_image_cv, boxes_and_contours)
+
+    for i, item_image in enumerate(panel_images):
+        normalized_img = normalize_image(item_image)
+        # For the ingredient panel, text is white on a dark background, so inversion is needed.
+        processed_image = binarize_image(normalized_img, invert_colors=True)
+
+        if processed_image is None or processed_image.size == 0:
+            continue
+
+        ocr_data = extract_text_from_image(processed_image, psm=7)
+        parsed_phrase = parse_single_phrase(ocr_data, min_confidence=40)
+        if parsed_phrase:
+            all_parsed_phrases.append(parsed_phrase)
+
+    # 3. Verification
+    print("\n--- OCR Results ---")
+    print("Parsed Ingredients:", all_parsed_phrases)
+    print("---------------------\n")
+
+    assert len(all_parsed_phrases) > 0, "OCR process ran but did not find any ingredients. Check game screen and ROI."
+
+
+# --- New ROI for Recipe List ---
+# This ROI should be configured for the area where the current recipe's
+# ingredient list is displayed (typically white text on a dark grey background).
+MANUAL_RECIPE_LIST_ROI = {
+    "left": 452,    # X coordinate of the top-left corner
+    "top": 884,   # Y coordinate of the top-left corner
+    "width": 1012,  # Width of the region
+    "height": 97, # Height of the region
+}
+
+
+@pytest.mark.skip(reason="Manual test: requires game to be running and ROI to be configured.")
+def test_live_ocr_on_recipe_list():
+    """
+    Captures the recipe list from a live game screen, processes it with OCR,
+    and prints the results for manual verification.
+    """
+    print("\n--- Starting Live OCR Test for Recipe List ---")
+    print(f"Capturing region: {MANUAL_RECIPE_LIST_ROI}")
+
+    # 1. Capture the screen region
+    recipe_image_pil = capture_region(MANUAL_RECIPE_LIST_ROI)
+    assert recipe_image_pil is not None, "Screen capture failed. Is the region valid?"
+
+    # Convert to OpenCV format
+    recipe_image_cv = cv2.cvtColor(np.array(recipe_image_pil), cv2.COLOR_RGB2BGR)
+
+    # 2. Process the captured image using the non-panel OCR pipeline
+    processed_image = binarize_image(recipe_image_cv, invert_colors=True)
+
+    if processed_image is None or processed_image.size == 0:
+        pytest.fail("Image binarization failed.")
+
+    # Use PSM 6 for a single uniform block of text.
+    ocr_data = extract_text_from_image(processed_image, psm=6)
+    parsed_ingredients = parse_ingredient_list(ocr_data, min_confidence=40)
+
+    # 3. Verification
+    print("\n--- OCR Results ---")
+    print("Parsed Ingredients:", parsed_ingredients)
+    print("---------------------\n")
+
+    assert len(parsed_ingredients) > 0, "OCR process ran but did not find any ingredients. Check game screen and ROI."

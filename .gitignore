@@ -1,1 +1,4 @@
 /chatmodes
+bot_activity.log
+/src/__pycache__
+/tests/__pycache__

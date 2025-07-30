@@ -46,51 +46,45 @@ This plan outlines the implementation steps for creating the Minimum Viable Prod
 | TASK-007 | Create `main.py` with a basic application entry point and main loop structure, including the `pyautogui` failsafe. |X|2025-07-29|
 | TASK-008 | Create `README.md` and populate it with installation and usage instructions as per `REQ-007`. |X|2025-07-29|
 
-### Implementation Phase 2: Screen Analysis & OCR
+### Implementation Phase 2: Screen Analysis & OCR (with Integrated Testing)
 
-- GOAL-002: Implement the logic to capture screen regions, pre-process images for clarity, and extract text using Tesseract OCR.
+- GOAL-002: Implement and verify the logic to capture, process, and extract text from screen regions.
 
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
 | TASK-009 | Create `src/ocr_processor.py`. | X | 2025-07-29 |
-| TASK-010 | In `src/ocr_processor.py`, implement `process_image_for_ocr(image)` to apply image pre-processing (e.g., grayscale, thresholding, resizing) using OpenCV. | X | 2025-07-29 |
-| TASK-011 | In `src/ocr_processor.py`, implement `extract_text_from_image(image)` to call `pytesseract` and return raw string data. | X | 2025-07-29 |
-| TASK-012 | In `src/ocr_processor.py`, implement `parse_ingredients(raw_text)` to clean the OCR output and format it into a list of strings. | X | 2025-07-29 |
-| TASK-012a | In `src/ocr_processor.py`, create a new function `find_ingredient_boxes(panel_image)` that uses OpenCV contour detection to programmatically find and return a list of individual ingredient text box images from a larger panel image. | X | 2025-07-29 |
-| TASK-012b | In `src/ocr_processor.py`, add a new function `extract_text_with_easyocr(image)` to provide an alternative OCR engine for debugging and comparison. | X | 2025-07-29 |
+| TASK-010 | In `src/ocr_processor.py`, implement the core image processing and text extraction functions (`normalize_image`, `binarize_image`, `extract_text_from_image`, etc.). | X | 2025-07-29 |
+| TASK-011 | In `src/ocr_processor.py`, implement `find_ingredient_boxes(panel_image)` using OpenCV contour detection to programmatically find ingredient boxes. | X | 2025-07-29 |
+| TASK-012 | In `src/ocr_processor.py`, implement the text parsing functions (`parse_single_phrase`, `parse_ingredient_list`). | X | 2025-07-29 |
+| TASK-013 | Add `pytest` to `requirements.txt` for test execution. | X | 2025-07-29 |
+| TASK-014 | Create test fixture directory `tests/fixtures/` and populate with sample images and corresponding `.txt` files with expected output. | X | 2025-07-29 |
+| TASK-015 | Create `tests/test_ocr_processor.py` with an end-to-end pipeline test that loads fixtures, runs the full OCR process, and asserts the output matches the expected text. | X | 2025-07-29 |
 
-### Testing Phase 2: OCR Module Verification
+### Implementation Phase 3: Core Bot Logic & Integration
 
-- GOAL-002-TEST: Verify the `ocr_processor` module correctly extracts text from various test images.
-
-| Task | Description | Completed | Date |
-|------|-------------|-----------|------|
-| TEST-001 | Add `pytest` to `requirements.txt` for test execution. | X | 2025-07-29 |
-| TEST-002 | Create test fixture directory `tests/fixtures/` and populate with sample images (light/dark backgrounds) and corresponding `.txt` files with expected output. | X | 2025-07-29 |
-| TEST-003 | Create `tests/fixtures/manifest.json` to define test cases, linking images to expected text files and the `invert_colors` setting. | X | 2025-07-29 |
-| TEST-004 | Update `tests/test_ocr_processor.py` to first call `find_ingredient_boxes` on panel images, then iterate through the returned sub-images for OCR processing and assertion. | X | 2025-07-29 |
-
-### Implementation Phase 3: Calibration & Setup
-
-- GOAL-003: Develop a one-time setup script to dynamically find game UI elements and calculate OCR regions, saving them to the configuration file.
+- GOAL-003: Integrate all modules to create the primary gameplay loop: read, decide, and act.
 
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
-| TASK-013 | Create a `setup.py` script in the root directory. The script should instruct the user to have the game open and visible. | | |
-| TASK-014 | In `setup.py`, use OpenCV's `cv2.matchTemplate` to locate reference UI elements on screen from images in `/assets/templates`. | | |
-| TASK-015 | In `setup.py`, calculate the absolute coordinates for `current_recipe_name` and `current_ingredients` ROIs based on the found reference elements. | | |
-| TASK-016 | In `setup.py`, use the `config_manager` to write the calculated ROI coordinates into `config.json`. | | |
+| TASK-016 | Create `src/bot_logic.py`. | | |
+| TASK-017 | In `src/bot_logic.py`, implement `map_ingredients_to_keys(required_ingredients, available_ingredients, key_map)` to determine the correct sequence of key presses. | | |
+| TASK-018 | Create `tests/test_bot_logic.py` to unit test the decision-making module. | | |
+| TASK-019 | In `test_bot_logic.py`, write unit tests for `map_ingredients_to_keys` with mock data to ensure correct key sequences are generated. | | |
+| TASK-020 | In `main.py`, implement the main loop to: capture the main ingredient panel ROI, pass it to `find_ingredient_boxes`, process each resulting box with OCR, pass the results to `bot_logic`, and execute keystrokes via `input_handler`. | | |
+| TASK-021 | Integrate the logger throughout the application to log key decisions, actions, and errors. | | |
 
-### Implementation Phase 4: Core Bot Logic & Integration
+### Implementation Phase 4: Calibration & Setup
 
-- GOAL-004: Integrate all modules to create the primary gameplay loop: read, decide, and act.
+- GOAL-004: Develop a one-time setup script to dynamically find game UI elements and calculate OCR regions, saving them to the configuration file.
 
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
-| TASK-017 | Create `src/bot_logic.py`. | | |
-| TASK-018 | In `src/bot_logic.py`, implement `map_ingredients_to_keys(required_ingredients, available_ingredients, key_map)` to determine the correct sequence of key presses. | | |
-| TASK-019 | In `main.py`, implement the main loop to: capture the main ingredient panel ROI, pass it to `find_ingredient_boxes`, process each resulting box with OCR, pass the results to `bot_logic`, and execute keystrokes via `input_handler`. | | |
-| TASK-020 | Integrate the logger throughout the application to log key decisions, actions, and errors. | | |'
+| TASK-022 | Create a `setup.py` script in the root directory. The script should instruct the user to have the game open and visible. | | |
+| TASK-023 | In `setup.py`, implement logic using `cv2.matchTemplate` to locate reference UI elements on screen from images in `/assets/templates`. | | |
+| TASK-024 | In `setup.py`, implement logic to calculate the absolute coordinates for `current_recipe_name` and `current_ingredients` ROIs based on the found reference elements. | | |
+| TASK-025 | In `setup.py`, use the `config_manager` to write the calculated ROI coordinates into `config.json`. | | |
+| TASK-026 | Create `tests/test_setup.py` to unit test the calibration logic. | | |
+| TASK-027 | In `test_setup.py`, write tests to verify template matching on fixture images and confirm correct `config.json` updates. | | |
 
 ## 3. Alternatives
 
