@@ -8,6 +8,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.screen_capture import capture_region
+from src.ocr_processor import configure_tesseract
 from src.ocr_processor import (
     find_ingredient_boxes,
     crop_image_by_boxes,
@@ -17,6 +18,9 @@ from src.ocr_processor import (
     parse_single_phrase,
     parse_ingredient_list,
 )
+
+# Configure Tesseract before running any tests that use OCR
+configure_tesseract()
 
 # --- Test Configuration ---
 # This is a manual integration test. It requires the game to be running and visible.
@@ -37,7 +41,7 @@ MANUAL_INGREDIENT_PANEL_ROI = {
 
 # uncommet skip and use VV to run
 # pytest tests/test_manual_integration.py -s 
-@pytest.mark.skip(reason="Manual test: requires game to be running and ROI to be configured.")
+# @pytest.mark.skip(reason="Manual test: requires game to be running and ROI to be configured.")
 def test_live_ocr_on_ingredient_panel():
     """
     Captures the ingredient panel from a live game screen, processes it with OCR,
@@ -72,13 +76,15 @@ def test_live_ocr_on_ingredient_panel():
             continue
 
         ocr_data = extract_text_from_image(processed_image, psm=7)
-        parsed_phrase = parse_single_phrase(ocr_data, min_confidence=40)
+        # Call the refactored parsing function to get phrase and confidence
+        parsed_phrase, confidence = parse_single_phrase(ocr_data, min_confidence=0, return_confidence=True)
         if parsed_phrase:
-            all_parsed_phrases.append(parsed_phrase)
+            all_parsed_phrases.append((parsed_phrase, confidence))
 
     # 3. Verification
     print("\n--- OCR Results ---")
-    print("Parsed Ingredients:", all_parsed_phrases)
+    for phrase, confidence in all_parsed_phrases:
+        print(f"- '{phrase}' (Confidence: {confidence:.2f}%)")
     print("---------------------\n")
 
     assert len(all_parsed_phrases) > 0, "OCR process ran but did not find any ingredients. Check game screen and ROI."
@@ -95,7 +101,7 @@ MANUAL_RECIPE_LIST_ROI = {
 }
 
 
-@pytest.mark.skip(reason="Manual test: requires game to be running and ROI to be configured.")
+# @pytest.mark.skip(reason="Manual test: requires game to be running and ROI to be configured.")
 def test_live_ocr_on_recipe_list():
     """
     Captures the recipe list from a live game screen, processes it with OCR,
@@ -111,19 +117,29 @@ def test_live_ocr_on_recipe_list():
     # Convert to OpenCV format
     recipe_image_cv = cv2.cvtColor(np.array(recipe_image_pil), cv2.COLOR_RGB2BGR)
 
+    # --- Upscale the image to improve OCR on potentially small text ---
+    # A scale factor of 2.0 is a good starting point.
+    scale_factor = 2.0
+    width = int(recipe_image_cv.shape[1] * scale_factor)
+    height = int(recipe_image_cv.shape[0] * scale_factor)
+    upscaled_image = cv2.resize(recipe_image_cv, (width, height), interpolation=cv2.INTER_CUBIC)
+
     # 2. Process the captured image using the non-panel OCR pipeline
-    processed_image = binarize_image(recipe_image_cv, invert_colors=True)
+    processed_image = binarize_image(upscaled_image, invert_colors=True)
 
     if processed_image is None or processed_image.size == 0:
         pytest.fail("Image binarization failed.")
 
     # Use PSM 6 for a single uniform block of text.
     ocr_data = extract_text_from_image(processed_image, psm=6)
-    parsed_ingredients = parse_ingredient_list(ocr_data, min_confidence=40)
+    
+    # Call the refactored parsing function to get ingredients and their confidences
+    parsed_ingredients_with_conf = parse_ingredient_list(ocr_data, min_confidence=0, return_confidence=True)
 
     # 3. Verification
     print("\n--- OCR Results ---")
-    print("Parsed Ingredients:", parsed_ingredients)
+    for phrase, confidence in parsed_ingredients_with_conf:
+        print(f"- '{phrase}' (Confidence: {confidence:.2f}%)")
     print("---------------------\n")
 
-    assert len(parsed_ingredients) > 0, "OCR process ran but did not find any ingredients. Check game screen and ROI."
+    assert len(parsed_ingredients_with_conf) > 0, "OCR process ran but did not find any ingredients. Check game screen and ROI."

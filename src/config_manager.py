@@ -35,6 +35,7 @@ class ConfigManager:
                     "expected_color_rgb": [54, 54, 54],
                     "tolerance": 10
                 },
+                "ocr_upscale_factor": 2.0,
                 "min_confidence": 50,
                 "logging_level": "INFO",
                 "main_loop_delay": 1.0,

@@ -3,6 +3,7 @@ import pytesseract
 import numpy as np
 import logging
 from pytesseract import Output
+from typing import Union
 from src.config_manager import ConfigManager
 from src.screen_capture import capture_region
 
@@ -184,7 +185,7 @@ def extract_text_from_image(image: np.ndarray, psm: int = 7) -> dict:
         log.error(f"An error occurred during OCR: {e}")
         return {}
 
-def parse_single_phrase(ocr_data: dict, min_confidence: int = 50) -> str:
+def parse_single_phrase(ocr_data: dict, min_confidence: int = 50, return_confidence: bool = False) -> Union[str, tuple[str, float]]:
     """
     Parses OCR data assuming it represents a single phrase (e.g., one ingredient name).
     It concatenates all words with sufficient confidence into a single string.
@@ -192,26 +193,34 @@ def parse_single_phrase(ocr_data: dict, min_confidence: int = 50) -> str:
     Args:
         ocr_data: The structured data dictionary from Pytesseract.
         min_confidence: The minimum confidence score to include a word.
+        return_confidence: If True, returns a tuple with the phrase and its average confidence.
 
     Returns:
-        A single string representing the recognized phrase.
+        A single string representing the recognized phrase, or a tuple with the phrase and confidence.
     """
     if not ocr_data or not ocr_data.get('text'):
-        return ""
+        return ("", 0.0) if return_confidence else ""
 
     words = []
+    confidences = []
     for i in range(len(ocr_data['text'])):
         confidence = int(ocr_data['conf'][i])
         if confidence >= min_confidence:
             text = ocr_data['text'][i].strip()
             if text:
                 words.append(text)
+                confidences.append(confidence)
 
     result = " ".join(words)
     log.debug(f"Parsed single phrase with min confidence {min_confidence}: '{result}'")
-    return result
+    
+    if return_confidence:
+        avg_confidence = sum(confidences) / len(confidences) if confidences else 0.0
+        return result, avg_confidence
+    else:
+        return result
 
-def parse_ingredient_list(ocr_data: dict, min_confidence: int = 50) -> list[str]:
+def parse_ingredient_list(ocr_data: dict, min_confidence: int = 50, return_confidence: bool = False) -> Union[list[str], list[tuple[str, float]]]:
     """
     Parses structured OCR data from a recipe list, intelligently grouping words
     into distinct ingredients based on proximity.
@@ -219,9 +228,10 @@ def parse_ingredient_list(ocr_data: dict, min_confidence: int = 50) -> list[str]
     Args:
         ocr_data: The structured data dictionary from Pytesseract.
         min_confidence: The minimum confidence score to include a word.
+        return_confidence: If True, returns a list of tuples with phrase and average confidence.
 
     Returns:
-        A list of strings, where each string is a recognized ingredient.
+        A list of strings or a list of (string, float) tuples.
     """
     if not ocr_data or not ocr_data.get('text'):
         return []
@@ -239,7 +249,8 @@ def parse_ingredient_list(ocr_data: dict, min_confidence: int = 50) -> list[str]
                 'left': int(ocr_data['left'][i]),
                 'width': int(ocr_data['width'][i]),
                 'line_num': int(ocr_data['line_num'][i]),
-                'block_num': int(ocr_data['block_num'][i])
+                'block_num': int(ocr_data['block_num'][i]),
+                'conf': confidence
             })
 
     if not words:
@@ -249,26 +260,40 @@ def parse_ingredient_list(ocr_data: dict, min_confidence: int = 50) -> list[str]
     words.sort(key=lambda w: (w['block_num'], w['line_num'], w['left']))
 
     # 3. Group words into ingredients based on proximity
-    ingredients = []
+    results = []
     current_ingredient_words = [words[0]['text']]
+    current_ingredient_confs = [words[0]['conf']]
     for i in range(1, len(words)):
         prev_word, current_word = words[i-1], words[i]
         same_line = current_word['block_num'] == prev_word['block_num'] and current_word['line_num'] == prev_word['line_num']
 
         if same_line and (current_word['left'] - (prev_word['left'] + prev_word['width'])) < horizontal_gap_threshold:
             current_ingredient_words.append(current_word['text'])
+            current_ingredient_confs.append(current_word['conf'])
         else:
-            ingredients.append(" ".join(current_ingredient_words))
+            phrase = " ".join(current_ingredient_words)
+            if return_confidence:
+                avg_conf = sum(current_ingredient_confs) / len(current_ingredient_confs) if current_ingredient_confs else 0.0
+                results.append((phrase, avg_conf))
+            else:
+                results.append(phrase)
+            
             current_ingredient_words = [current_word['text']]
+            current_ingredient_confs = [current_word['conf']]
 
     if current_ingredient_words:
-        ingredients.append(" ".join(current_ingredient_words))
+        phrase = " ".join(current_ingredient_words)
+        if return_confidence:
+            avg_conf = sum(current_ingredient_confs) / len(current_ingredient_confs) if current_ingredient_confs else 0.0
+            results.append((phrase, avg_conf))
+        else:
+            results.append(phrase)
 
-    log.info(f"Parsed ingredient list with min confidence {min_confidence}: {ingredients}")
-    return ingredients
+    log.info(f"Parsed ingredient list with min confidence {min_confidence}: {results}")
+    return results
 
 
-def process_recipe_list_roi(roi: dict) -> list[str]:
+def process_recipe_list_roi(roi: dict, return_confidence: bool = False) -> Union[list[str], list[tuple[str, float]]]:
     """
     Captures and OCRs the recipe list region, returning a list of required steps.
     This is a high-level function that orchestrates the full pipeline.
@@ -276,6 +301,14 @@ def process_recipe_list_roi(roi: dict) -> list[str]:
     image_cv = capture_region(roi)  # Returns a BGRA numpy array
     if image_cv is None:
         return []
+
+    # Upscale the image to improve OCR on potentially small text
+    scale_factor = config.get_setting("bot_settings.ocr_upscale_factor", default=1.0)
+    if scale_factor > 1.0:
+        log.debug(f"Upscaling recipe list image by factor of {scale_factor}")
+        width = int(image_cv.shape[1] * scale_factor)
+        height = int(image_cv.shape[0] * scale_factor)
+        image_cv = cv2.resize(image_cv, (width, height), interpolation=cv2.INTER_CUBIC)
 
     # Recipe list has light text on a dark background, so inversion is needed.
     processed_image = binarize_image(image_cv, invert_colors=True)

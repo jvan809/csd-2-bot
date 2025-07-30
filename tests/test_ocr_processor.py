@@ -9,6 +9,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.ocr_processor import *
 
+# Configure Tesseract before running any tests that use OCR
+configure_tesseract()
+
 # Define the path to the test fixtures directory
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
