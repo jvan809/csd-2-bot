@@ -52,28 +52,35 @@ def load_test_cases():
             image_path, invert_colors, is_panel, expected_text, psm_mode, min_confidence, id=stem
         ))
 
-
-    ## Single ingredient testing 
-    
-    # single_ingredient_dir = FIXTURES_DIR / "single_ingredients"
-    # if single_ingredient_dir.is_dir():
-    #     for image_path in single_ingredient_dir.glob("*.png"):
-    #         # The expected text is the name of the file without the extension.
-    #         expected_text = image_path.stem
-    
-    #         test_cases.append(
-    #             pytest.param(
-    #                 image_path,
-    #                 False,  # Assume dark text on light background
-    #                 False,  # Not a panel
-    #                 expected_text,
-    #                 7,      # Default PSM
-    #                 50,     # Default confidence
-    #                 id=f"single_ingredient_{expected_text}"
-    #             )
-    #         )
-
     return test_cases
+
+def _get_phrases_from_panel(image: np.ndarray, psm_mode: int, min_confidence: int, invert_colors: bool) -> list[str]:
+    """Helper function to process a panel image and return a list of parsed phrases."""
+    all_parsed_phrases = []
+    boxes_and_contours = find_ingredient_boxes(image)
+    panel_images = crop_image_by_boxes(image, boxes_and_contours)
+    
+    for item_image in panel_images:
+        normalized_img = normalize_image(item_image)
+        processed_image = binarize_image(normalized_img, invert_colors=invert_colors)
+        if processed_image is None or processed_image.size == 0:
+            continue
+
+        ocr_data = extract_text_from_image(processed_image, psm=psm_mode)
+        parsed_phrase = parse_single_phrase(ocr_data, min_confidence=min_confidence)
+        if parsed_phrase:
+            all_parsed_phrases.append(parsed_phrase)
+    return all_parsed_phrases
+
+def _get_ingredients_from_list(image: np.ndarray, psm_mode: int, min_confidence: int, invert_colors: bool) -> list[str]:
+    """Helper function to process a recipe list image and return a list of ingredients."""
+    all_parsed_ingredients = []
+    processed_image = binarize_image(image, invert_colors=invert_colors)
+    if processed_image is not None and processed_image.size > 0:
+        ocr_data = extract_text_from_image(processed_image, psm=psm_mode)
+        parsed_list = parse_ingredient_list(ocr_data, min_confidence=min_confidence)
+        all_parsed_ingredients.extend(parsed_list)
+    return all_parsed_ingredients
 
 @pytest.mark.parametrize(
     "image_path, invert_colors, is_panel, expected_text, psm_mode, min_confidence",
@@ -81,38 +88,17 @@ def load_test_cases():
 )
 def test_ocr_pipeline(image_path, invert_colors, is_panel, expected_text, psm_mode, min_confidence):
     """
-    Tests the full OCR pipeline from image to parsed ingredients list.
+    Tests the full OCR pipeline by coordinating between different processing strategies.
     """
     image = cv2.imread(str(image_path), cv2.IMREAD_UNCHANGED)
     assert image is not None, f"Failed to load image: {image_path}"
 
-    all_parsed_ingredients = []
-
     if is_panel:
-        # Path for panel images: crop into individual items, then parse each as a single phrase.
-        boxes_and_contours = find_ingredient_boxes(image)
-        panel_images = crop_image_by_boxes(image, boxes_and_contours)
-        
-        for item_image in panel_images:
-            normalized_img = normalize_image(item_image)
-            processed_image = binarize_image(normalized_img, invert_colors=invert_colors)
-            if processed_image is None or processed_image.size == 0:
-                continue
-
-            ocr_data = extract_text_from_image(processed_image, psm=psm_mode)
-            parsed_phrase = parse_single_phrase(ocr_data, min_confidence=min_confidence)
-            if parsed_phrase:
-                all_parsed_ingredients.append(parsed_phrase)
-
-
+        # Strategy for panel images: crop into individual items, then parse each as a single phrase.
+        all_parsed_ingredients = _get_phrases_from_panel(image, psm_mode, min_confidence, invert_colors)
     else:
-        # Path for non-panel images: these are treated as a single block of text
-        # that may contain one or more ingredients (e.g., a recipe list).
-        processed_image = binarize_image(image, invert_colors=invert_colors)
-        if processed_image is not None and processed_image.size > 0:
-            ocr_data = extract_text_from_image(processed_image, psm=psm_mode)
-            parsed_list = parse_ingredient_list(ocr_data, min_confidence=min_confidence)
-            all_parsed_ingredients.extend(parsed_list)
+        # Strategy for non-panel images: treat as a single block of text (e.g., a recipe list).
+        all_parsed_ingredients = _get_ingredients_from_list(image, psm_mode, min_confidence, invert_colors)
 
     # Filter out any empty strings that might result from failed OCR on some boxes.
     actual_text = "\n".join([ing for ing in all_parsed_ingredients if ing]).strip()

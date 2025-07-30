@@ -10,7 +10,7 @@ def main():
     config_manager = ConfigManager()
     
     # Enable PyAutoGUI failsafe
-    if config_manager.get_setting("bot_settings", "enable_failsafe"):
+    if config_manager.get_setting("bot_settings.enable_failsafe", default=True):
         pyautogui.FAILSAFE = True
         log.info("PyAutoGUI failsafe enabled. Move mouse to top-left corner to stop.")
     else:

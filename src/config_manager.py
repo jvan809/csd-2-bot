@@ -1,5 +1,9 @@
 import json
 from pathlib import Path
+import logging
+
+log = logging.getLogger('csd2_bot')
+
 
 class ConfigManager:
     """Manages loading and saving of the application's configuration file."""
@@ -22,8 +26,9 @@ class ConfigManager:
                 "panel_detection": {
                     "threshold_value": 245,
                     "min_area": 1000,
-                    "min_aspect_ratio": 2.0
-            }
+                    "min_aspect_ratio": 2.0,
+                    "horizontal_gap_threshold": 30
+                }
             },
             
             "controls": {
@@ -41,9 +46,26 @@ class ConfigManager:
             self.config = self._get_default_config()
             self.save_config()
 
-    def get_setting(self, section: str, key: str):
-        """Retrieves a specific setting from the configuration."""
-        return self.config.get(section, {}).get(key)
+    def get_setting(self, path: str, default=None):
+        """
+        Retrieves a nested setting from the configuration using a dot-separated path.
+        e.g., get_setting("bot_settings.panel_detection.min_area")
+
+        Args:
+            path: The dot-separated path to the setting.
+            default: The value to return if the setting is not found.
+
+        Returns:
+            The value of the setting, or the default value if not found.
+        """
+        keys = path.split('.')
+        value = self.config
+        for key in keys:
+            value = value.get(key)
+            if value is None:
+                log.warning(f"Setting '{path}' not found in configuration. Using default value: {default}")
+                return default
+        return value
 
     def update_setting(self, section: str, key: str, value):
         """Updates a setting and saves the configuration."""

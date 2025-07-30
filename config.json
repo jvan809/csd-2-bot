@@ -19,8 +19,9 @@
         "panel_detection": {
             "threshold_value": 245,
             "min_area": 1000,
-            "min_aspect_ratio": 2.0
-    }
+            "min_aspect_ratio": 2.0,
+            "horizontal_gap_threshold": 30
+        }
     },
 
     "controls": {

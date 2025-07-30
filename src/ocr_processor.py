@@ -11,7 +11,7 @@ log = logging.getLogger('csd2_bot')
 # This configuration is done once when the module is imported.
 try:
     config = ConfigManager()
-    tesseract_path = config.get_setting("bot_settings", "tesseract_path")
+    tesseract_path = config.get_setting("bot_settings.tesseract_path")
     if tesseract_path:
         pytesseract.pytesseract.tesseract_cmd = tesseract_path
     log.info(f"Tesseract path set to: {pytesseract.pytesseract.tesseract_cmd}")
@@ -98,10 +98,9 @@ def find_ingredient_boxes(panel_image: np.ndarray) -> list[tuple[tuple[int, int,
         log.error("Cannot find boxes in a None image.")
         return []
 
-    detection_settings = config.get_setting("bot_settings", "panel_detection") or {}
-    threshold_val = detection_settings.get("threshold_value", 245)
-    min_area = detection_settings.get("min_area", 1000)
-    min_aspect_ratio = detection_settings.get("min_aspect_ratio", 2.0)
+    threshold_val = config.get_setting("bot_settings.panel_detection.threshold_value", default=245)
+    min_area = config.get_setting("bot_settings.panel_detection.min_area", default=1000)
+    min_aspect_ratio = config.get_setting("bot_settings.panel_detection.min_aspect_ratio", default=2.0)
 
     # 1. Pre-process the image to find the white background of the text boxes.
     gray = cv2.cvtColor(panel_image, cv2.COLOR_BGRA2GRAY)
@@ -211,7 +210,7 @@ def parse_single_phrase(ocr_data: dict, min_confidence: int = 50) -> str:
     log.info(f"Parsed single phrase with min confidence {min_confidence}: '{result}'")
     return result
 
-def parse_ingredient_list(ocr_data: dict, min_confidence: int = 50, horizontal_gap_threshold: int = 30) -> list[str]:
+def parse_ingredient_list(ocr_data: dict, min_confidence: int = 50) -> list[str]:
     """
     Parses structured OCR data from a recipe list, intelligently grouping words
     into distinct ingredients based on proximity.
@@ -219,13 +218,14 @@ def parse_ingredient_list(ocr_data: dict, min_confidence: int = 50, horizontal_g
     Args:
         ocr_data: The structured data dictionary from Pytesseract.
         min_confidence: The minimum confidence score to include a word.
-        horizontal_gap_threshold: The max horizontal pixel gap between words in the same ingredient.
 
     Returns:
         A list of strings, where each string is a recognized ingredient.
     """
     if not ocr_data or not ocr_data.get('text'):
         return []
+
+    horizontal_gap_threshold = config.get_setting("bot_settings.panel_detection.horizontal_gap_threshold", default=30)
 
     # 1. Collect all valid words with their properties into a list of dicts
     words = []
