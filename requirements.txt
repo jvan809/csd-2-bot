@@ -1,0 +1,8 @@
+mss
+Pillow
+opencv-python
+pytesseract
+pyautogui
+
+# -- Testing --
+pytest

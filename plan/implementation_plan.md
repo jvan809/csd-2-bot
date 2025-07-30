@@ -1,0 +1,143 @@
+---
+goal: Implementation Plan for the CSD2 Bot MVP
+version: 1.0
+date_created: 2025-07-30
+last_updated: 
+owner: AI Assistant (for User)
+tags: ['feature', 'app', 'automation', 'game', 'python', 'ai', 'mvp']
+---
+
+# Introduction
+
+This plan outlines the implementation steps for creating the Minimum Viable Product (MVP) of the `csd2` bot. The goal is to build a Python-based application for Windows that automates gameplay by reading recipe information from the screen using OCR and emulating the necessary keyboard inputs to complete the recipe.
+
+## 1. Requirements & Constraints
+
+- **REQ-001**: The bot shall run on the Windows operating system.
+- **REQ-002**: The bot shall be written in Python.
+- **REQ-003**: The bot shall read the required ingredients from the game screen in real-time.
+- **REQ-004**: The bot shall emulate keyboard presses corresponding to the identified ingredients and cooking actions.
+- **REQ-005**: The bot shall log its actions (e.g., recipe identified, keys pressed, errors).
+- **REQ-006**: The bot shall support handling all ~200 foods in the game with minimal hardcoding of specific recipes.
+- **REQ-007**: The project shall include a `README.md` file with clear setup and usage instructions.
+- **CON-001**: The game does not provide a public API for programmatic interaction.
+- **CON-002**: OCR must be resilient to different game window sizes.
+- **CON-003**: The bot should perform screen capture one time per page of ingredients.
+- **CON-004**: OCR must handle text on varied backgrounds (black text on white, white text on a fixed knife background).
+- **GUD-001**: Implement a 'setup' phase to identify and store bounding box coordinates for OCR regions.
+- **GUD-002**: Use `pyautogui`'s mouse-based failsafe as a "panic button" to stop bot operation.
+- **GUD-003**: Favor a modular design where screen reading, decision logic, and input emulation are separated.
+- **GUD-004**: Abstract external library calls for screen capture and key presses into wrapper functions.
+
+## 2. Implementation Steps
+
+### Implementation Phase 1: Project Setup & Core Utilities
+
+- GOAL-001: Establish the project structure, manage dependencies, and create foundational utility modules for configuration, logging, and I/O.
+
+| Task | Description | Completed | Date |
+|------|-------------|-----------|------|
+| TASK-001 | Create the project directory structure: `/src`, `/plan`, `/tests`, `/assets/templates`. |X|2025-07-29|
+| TASK-002 | Create and populate `requirements.txt` with `mss`, `Pillow`, `opencv-python`, `pytesseract`, and `pyautogui`. |X|2025-07-29|
+| TASK-003 | Create `src/config_manager.py` to load, access, and save settings from `config.json`, including a default structure. |X|2025-07-29|
+| TASK-004 | Create `src/logger_setup.py` to configure a file logger for application events and errors. |X|2025-07-29|
+| TASK-005 | Create `src/input_handler.py` with a wrapper function `press_key(key)` for `pyautogui.press()`. |X|2025-07-29|
+| TASK-006 | Create `src/screen_capture.py` with a wrapper function `capture_region(roi)` using `mss`. |X|2025-07-29|
+| TASK-007 | Create `main.py` with a basic application entry point and main loop structure, including the `pyautogui` failsafe. |X|2025-07-29|
+| TASK-008 | Create `README.md` and populate it with installation and usage instructions as per `REQ-007`. |X|2025-07-29|
+
+### Implementation Phase 2: Screen Analysis & OCR
+
+- GOAL-002: Implement the logic to capture screen regions, pre-process images for clarity, and extract text using Tesseract OCR.
+
+| Task | Description | Completed | Date |
+|------|-------------|-----------|------|
+| TASK-009 | Create `src/ocr_processor.py`. | X | 2025-07-29 |
+| TASK-010 | In `src/ocr_processor.py`, implement `process_image_for_ocr(image)` to apply image pre-processing (e.g., grayscale, thresholding, resizing) using OpenCV. | X | 2025-07-29 |
+| TASK-011 | In `src/ocr_processor.py`, implement `extract_text_from_image(image)` to call `pytesseract` and return raw string data. | X | 2025-07-29 |
+| TASK-012 | In `src/ocr_processor.py`, implement `parse_ingredients(raw_text)` to clean the OCR output and format it into a list of strings. | X | 2025-07-29 |
+| TASK-012a | In `src/ocr_processor.py`, create a new function `find_ingredient_boxes(panel_image)` that uses OpenCV contour detection to programmatically find and return a list of individual ingredient text box images from a larger panel image. | X | 2025-07-29 |
+| TASK-012b | In `src/ocr_processor.py`, add a new function `extract_text_with_easyocr(image)` to provide an alternative OCR engine for debugging and comparison. | X | 2025-07-29 |
+
+### Testing Phase 2: OCR Module Verification
+
+- GOAL-002-TEST: Verify the `ocr_processor` module correctly extracts text from various test images.
+
+| Task | Description | Completed | Date |
+|------|-------------|-----------|------|
+| TEST-001 | Add `pytest` to `requirements.txt` for test execution. | X | 2025-07-29 |
+| TEST-002 | Create test fixture directory `tests/fixtures/` and populate with sample images (light/dark backgrounds) and corresponding `.txt` files with expected output. | X | 2025-07-29 |
+| TEST-003 | Create `tests/fixtures/manifest.json` to define test cases, linking images to expected text files and the `invert_colors` setting. | X | 2025-07-29 |
+| TEST-004 | Update `tests/test_ocr_processor.py` to first call `find_ingredient_boxes` on panel images, then iterate through the returned sub-images for OCR processing and assertion. | X | 2025-07-29 |
+
+### Implementation Phase 3: Calibration & Setup
+
+- GOAL-003: Develop a one-time setup script to dynamically find game UI elements and calculate OCR regions, saving them to the configuration file.
+
+| Task | Description | Completed | Date |
+|------|-------------|-----------|------|
+| TASK-013 | Create a `setup.py` script in the root directory. The script should instruct the user to have the game open and visible. | | |
+| TASK-014 | In `setup.py`, use OpenCV's `cv2.matchTemplate` to locate reference UI elements on screen from images in `/assets/templates`. | | |
+| TASK-015 | In `setup.py`, calculate the absolute coordinates for `current_recipe_name` and `current_ingredients` ROIs based on the found reference elements. | | |
+| TASK-016 | In `setup.py`, use the `config_manager` to write the calculated ROI coordinates into `config.json`. | | |
+
+### Implementation Phase 4: Core Bot Logic & Integration
+
+- GOAL-004: Integrate all modules to create the primary gameplay loop: read, decide, and act.
+
+| Task | Description | Completed | Date |
+|------|-------------|-----------|------|
+| TASK-017 | Create `src/bot_logic.py`. | | |
+| TASK-018 | In `src/bot_logic.py`, implement `map_ingredients_to_keys(required_ingredients, available_ingredients, key_map)` to determine the correct sequence of key presses. | | |
+| TASK-019 | In `main.py`, implement the main loop to: capture the main ingredient panel ROI, pass it to `find_ingredient_boxes`, process each resulting box with OCR, pass the results to `bot_logic`, and execute keystrokes via `input_handler`. | | |
+| TASK-020 | Integrate the logger throughout the application to log key decisions, actions, and errors. | | |'
+
+## 3. Alternatives
+
+- **ALT-001**: Hard-coding screen coordinates: This was rejected because it is not resilient to changes in game window size or resolution, violating `CON-002`. The dynamic setup phase is more robust.
+- **ALT-002**: Using a different OCR engine: Tesseract was chosen due to its maturity, Python support via `pytesseract`, and offline capabilities. Other cloud-based OCR services were rejected as they would introduce internet dependencies.
+
+## 4. Dependencies
+
+- **DEP-001**: Python 3.x runtime environment.
+- **DEP-002**: Tesseract OCR Engine system executable.
+- **DEP-003**: Python library: `mss` (for screen capture).
+- **DEP-004**: Python library: `Pillow` (for image manipulation).
+- **DEP-005**: Python library: `opencv-python` (for image processing and template matching).
+- **DEP-006**: Python library: `pytesseract` (for Tesseract OCR interface).
+- **DEP-007**: Python library: `pyautogui` (for keyboard emulation and failsafe).
+
+## 5. Files
+
+- **FILE-001**: `/plan/feature-csd2-bot-1.md` (This file)
+- **FILE-002**: `/main.py` (Main application entry point)
+- **FILE-003**: `/setup.py` (One-time calibration script)
+- **FILE-004**: `/requirements.txt` (Project dependencies)
+- **FILE-005**: `/config.json` (Stores ROIs and settings)
+- **FILE-006**: `/src/config_manager.py` (Handles configuration data)
+- **FILE-007**: `/src/logger_setup.py` (Handles logging setup)
+- **FILE-008**: `/src/screen_capture.py` (Wrapper for screen grabbing)
+- **FILE-009**: `/src/input_handler.py` (Wrapper for keyboard emulation)
+- **FILE-010**: `/src/ocr_processor.py` (Handles image processing and text extraction)
+- **FILE-011**: `/src/bot_logic.py` (Contains the core decision-making logic)
+- **FILE-012**: `/README.md` (User-facing setup and usage instructions)
+
+## 6. Testing
+
+- **TEST-001**: Unit tests for `ocr_processor.py` using a set of pre-captured static screenshots from `/tests/fixtures` to ensure reliable text extraction.
+- **TEST-002**: Unit tests for `bot_logic.py` using mock ingredient lists to verify the key-mapping logic is correct.
+- **TEST-003**: Integration test for `setup.py` to confirm it correctly identifies template images and writes a valid `config.json`.
+- **TEST-004**: Manual end-to-end test running the bot against the live game to verify timing, accuracy, and the failsafe mechanism.
+
+## 7. Risks & Assumptions
+
+- **RISK-001**: OCR accuracy may be insufficient out-of-the-box and could require extensive image pre-processing tuning for different in-game text backgrounds.
+- **RISK-002**: Future game patches may alter UI elements, breaking the template matching in the `setup.py` script and requiring new template images.
+- **RISK-003**: The performance of the capture -> process -> input pipeline may be too slow for the game's real-time demands, leading to missed orders.
+- **RISK-004**: The manual setup process (installing Python, Tesseract, and packages) may be too complex for non-technical users, hindering adoption.
+- **ASSUMPTION-001**: The performance of the capture -> process -> input pipeline in Python will be fast enough to meet the game's real-time demands.
+- **ASSUMPTION-002**: The geometric relationship between reference UI elements and the OCR regions is constant across all supported resolutions.
+
+## 8. Related Specifications / Further Reading
+
+- csd2 Bot MVP Specification
