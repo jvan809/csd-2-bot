@@ -30,8 +30,8 @@ class ConfigManager:
                     "horizontal_gap_threshold": 30
                 },
                 "recipe_trigger": {
-                    "check_pixel_x": 462,
-                    "check_pixel_y": 977,
+                    "check_pixel_x": 454,
+                    "check_pixel_y": 973,
                     "expected_color_rgb": [54, 54, 54],
                     "tolerance": 10
                 },
@@ -50,14 +50,37 @@ class ConfigManager:
             }
         }
 
+    def _merge_dicts(self, base_dict: dict, override_dict: dict) -> dict:
+        """
+        Recursively merges the override_dict into the base_dict.
+        Values from override_dict take precedence. This ensures user settings
+        are preserved while new default settings can be added.
+        """
+        merged = base_dict.copy()
+        for key, value in override_dict.items():
+            if isinstance(value, dict) and key in merged and isinstance(merged[key], dict):
+                merged[key] = self._merge_dicts(merged[key], value)
+            else:
+                merged[key] = value
+        return merged
+
     def _load_or_create_config(self):
-        """Loads the configuration from the file, or creates it if it doesn't exist."""
+        """
+        Loads config from file, or creates it if it doesn't exist.
+        Merges with default config to ensure all keys are present.
+        """
+        default_config = self._get_default_config()
         if self.config_path.exists():
-            with open(self.config_path, 'r') as f:
-                self.config = json.load(f)
+            try:
+                with open(self.config_path, 'r') as f:
+                    user_config = json.load(f)
+                self.config = self._merge_dicts(default_config, user_config)
+            except (json.JSONDecodeError, TypeError):
+                log.warning(f"Could not parse '{self.config_path}'. Using default config.")
+                self.config = default_config
         else:
-            self.config = self._get_default_config()
-            self.save_config()
+            self.config = default_config
+        self.save_config()
 
     def get_setting(self, path: str, default=None):
         """
@@ -80,11 +103,29 @@ class ConfigManager:
                 return default
         return value
 
-    def update_setting(self, section: str, key: str, value):
-        """Updates a setting and saves the configuration."""
-        if section not in self.config:
-            self.config[section] = {}
-        self.config[section][key] = value
+    def update_setting(self, path: str, value):
+        """
+        Updates a nested setting in the configuration using a dot-separated path
+        and saves the configuration.
+        e.g., update_setting("bot_settings.panel_detection.min_area", 1200)
+
+        Args:
+            path: The dot-separated path to the setting.
+            value: The new value to set.
+        """
+        keys = path.split('.')
+        if not keys or not keys[0]:
+            log.error("Cannot update setting with an empty or invalid path.")
+            return
+
+        current_level = self.config
+        for key in keys[:-1]:
+            current_level = current_level.setdefault(key, {})
+            if not isinstance(current_level, dict):
+                log.error(f"Cannot update setting '{path}'. Part of the path ('{key}') is not a dictionary.")
+                return
+
+        current_level[keys[-1]] = value
         self.save_config()
 
     def save_config(self):

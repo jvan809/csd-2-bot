@@ -17,6 +17,7 @@ from src.ocr_processor import (
     extract_text_from_image,
     parse_single_phrase,
     parse_ingredient_list,
+    correct_shear,
 )
 
 # Configure Tesseract before running any tests that use OCR
@@ -32,6 +33,16 @@ configure_tesseract()
 # 3. Comment out or remove the `@pytest.mark.skip` line below.
 # 4. Run pytest from your terminal: `pytest tests/test_manual_integration.py -s` (the -s flag shows print output)
 
+# --- Debugging Configuration ---
+# Set to True to display the black-and-white images that are sent to OCR.
+# A window will pop up for each image; press any key to continue.
+SHOW_PREPROCESSED_IMAGES = False
+PERFORM_SHEAR_CORRECTION = True
+# This value will need to be tuned experimentally.
+# Positive values correct a right-leaning slant.
+# Negative values correct a left-leaning slant.
+SHEAR_FACTOR = 0.15
+
 MANUAL_INGREDIENT_PANEL_ROI = {
     "left": 1610,  # X coordinate of the top-left corner
     "top": 146,    # Y coordinate of the top-left corner
@@ -39,8 +50,6 @@ MANUAL_INGREDIENT_PANEL_ROI = {
     "height": 364, # Height of the region
 }
 
-# uncommet skip and use VV to run
-# pytest tests/test_manual_integration.py -s 
 # @pytest.mark.skip(reason="Manual test: requires game to be running and ROI to be configured.")
 def test_live_ocr_on_ingredient_panel():
     """
@@ -68,9 +77,20 @@ def test_live_ocr_on_ingredient_panel():
     panel_images = crop_image_by_boxes(panel_image_cv, boxes_and_contours)
 
     for i, item_image in enumerate(panel_images):
-        normalized_img = normalize_image(item_image)
-        # For the ingredient panel, text is white on a dark background, so inversion is needed.
-        processed_image = binarize_image(normalized_img, invert_colors=True)
+        image_to_process = item_image
+
+
+        if PERFORM_SHEAR_CORRECTION:
+            image_to_process = correct_shear(image_to_process, SHEAR_FACTOR)
+
+        normalized_img = normalize_image(image_to_process)
+        # For the ingredient panel, text is black on white, so no inversion is needed
+        processed_image = binarize_image(normalized_img, invert_colors=False)
+
+        if SHOW_PREPROCESSED_IMAGES and processed_image is not None:
+            cv2.imshow(f"Processed Ingredient {i+1}", processed_image)
+            cv2.waitKey(0)
+            cv2.destroyWindow(f"Processed Ingredient {i+1}")
 
         if processed_image is None or processed_image.size == 0:
             continue
@@ -101,7 +121,7 @@ MANUAL_RECIPE_LIST_ROI = {
 }
 
 
-# @pytest.mark.skip(reason="Manual test: requires game to be running and ROI to be configured.")
+@pytest.mark.skip(reason="Manual test: requires game to be running and ROI to be configured.")
 def test_live_ocr_on_recipe_list():
     """
     Captures the recipe list from a live game screen, processes it with OCR,
@@ -117,12 +137,14 @@ def test_live_ocr_on_recipe_list():
     # Convert to OpenCV format
     recipe_image_cv = cv2.cvtColor(np.array(recipe_image_pil), cv2.COLOR_RGB2BGR)
 
+    image_to_process = recipe_image_cv # no shear correction for recipe - it's not italic.
+
     # --- Upscale the image to improve OCR on potentially small text ---
     # A scale factor of 2.0 is a good starting point.
     scale_factor = 2.0
-    width = int(recipe_image_cv.shape[1] * scale_factor)
-    height = int(recipe_image_cv.shape[0] * scale_factor)
-    upscaled_image = cv2.resize(recipe_image_cv, (width, height), interpolation=cv2.INTER_CUBIC)
+    width = int(image_to_process.shape[1] * scale_factor)
+    height = int(image_to_process.shape[0] * scale_factor)
+    upscaled_image = cv2.resize(image_to_process, (width, height), interpolation=cv2.INTER_CUBIC)
 
     # 2. Process the captured image using the non-panel OCR pipeline
     processed_image = binarize_image(upscaled_image, invert_colors=True)

@@ -8,10 +8,12 @@ def press_key(key: str):
     Presses a single key using pydirectinput for better game compatibility.
     Logs the action.
     """
+    # possible future feature, take list of inputs?
     try:
         # Convert all keys to lowercase to ensure compatibility.
         # Games often expect the base key press (e.g., 'a') rather than a shifted one ('A').
         pydirectinput.press(key.lower())
-        log.debug(f"Pressed key: {key}")
+        # Log the actual key being sent to the input handler
+        log.debug(f"Pressed key: {key.lower()}")
     except Exception as e:
         log.error(f"Failed to press key '{key}': {e}")

@@ -1,4 +1,5 @@
 import pyautogui
+import pydirectinput
 from src.logger_setup import setup_logger
 from src.config_manager import ConfigManager
 from src.input_handler import press_key
@@ -23,8 +24,6 @@ def run_game_loop(config_manager: ConfigManager):
     page_turn_key = config_manager.get_setting("controls.page_turn_key")
     confirm_key = config_manager.get_setting("controls.confirm_key")
     loop_delay = config_manager.get_setting("bot_settings.main_loop_delay", default=1.0)
-    key_delay = config_manager.get_setting("bot_settings.key_delay", default=0.05)
-    page_delay = config_manager.get_setting("bot_settings.page_delay", default=0.25)
     
     # --- 2. Wait for Recipe ---
     log.info("Waiting for a new recipe...")
@@ -37,7 +36,7 @@ def run_game_loop(config_manager: ConfigManager):
     while not pyautogui.pixelMatchesColor(trigger_x, trigger_y, expected_color, tolerance=tolerance):
         pyautogui.sleep(loop_delay) # Wait before trying again
 
-    log.info(f"Recipe trigger detected at ({trigger_x}, {trigger_y}). Reading recipe...")
+    log.debug(f"Recipe trigger detected at ({trigger_x}, {trigger_y}). Reading recipe...")
     remaining_steps = []
     remaining_steps = process_recipe_list_roi(recipe_roi)
     if not remaining_steps:
@@ -65,7 +64,6 @@ def run_game_loop(config_manager: ConfigManager):
         if keys_to_press:
             for key in keys_to_press:
                 press_key(key)
-                pyautogui.sleep(key_delay) # Small delay between key presses
 
             # Remove matched ingredients from the remaining steps, handling duplicates correctly
             temp_matched = list(matched_ingredients)
@@ -82,7 +80,6 @@ def run_game_loop(config_manager: ConfigManager):
             log.debug("There are remaining steps, turning page.")
             press_key(page_turn_key)
             page_turns += 1
-            pyautogui.sleep(page_delay) # Wait for page turn animation
         else:
             break # No more steps or max pages reached
 
@@ -92,6 +89,7 @@ def run_game_loop(config_manager: ConfigManager):
         press_key(confirm_key)
     else:
         log.warning(f"Finished recipe attempt with remaining steps: {remaining_steps}. Manual intervention may be needed.")
+        pyautogui.sleep(5)
 
 def main():      
     """Main application entry point."""
@@ -103,6 +101,12 @@ def main():
 
     # 3. Configure Tesseract now that the logger is ready
     configure_tesseract()
+
+    # --- Configure Input Library ---
+    # Lower the default pause in pydirectinput for faster key presses.
+    # A small pause can sometimes be more reliable than 0 for some applications.
+    key_delay = config_manager.get_setting("bot_settings.key_delay", default=0.05)
+    pydirectinput.PAUSE = key_delay
 
     log.info("Starting CSD2 Bot...")
     

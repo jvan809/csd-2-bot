@@ -17,7 +17,7 @@ def configure_tesseract():
         tesseract_path = config.get_setting("bot_settings.tesseract_path")
         if tesseract_path:
             pytesseract.pytesseract.tesseract_cmd = tesseract_path
-        log.info(f"Tesseract path set to: {pytesseract.pytesseract.tesseract_cmd}")
+        log.debug(f"Tesseract path set to: {pytesseract.pytesseract.tesseract_cmd}")
     except Exception as e:
         log.error(f"Could not set Tesseract path from config. Ensure it's in your system PATH. Error: {e}")
 
@@ -84,6 +84,28 @@ def binarize_image(image: np.ndarray, invert_colors: bool = False) -> np.ndarray
     log.debug(f"Image binarized for OCR. Inverted colors: {invert_colors}")
     return processed_image
 
+def correct_shear(image: np.ndarray, shear_factor: float) -> np.ndarray:
+    """
+    Corrects for horizontal shear in an image, common with italic-style fonts.
+
+    Args:
+        image: The input image with sheared text.
+        shear_factor: The amount of shear to apply. Positive values correct a
+                      right-leaning slant, negative values correct a left-leaning slant.
+
+    Returns:
+        The de-sheared image.
+    """
+    if shear_factor == 0.0:
+        return image
+
+    (h, w) = image.shape[:2]
+    
+    M = np.array([[1, shear_factor, 0], [0, 1, 0]], dtype=np.float32)
+
+    log.debug(f"correct_shear: Applying shear factor of {shear_factor:.2f}.")
+    return cv2.warpAffine(image, M, (w, h), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE)
+
 def find_ingredient_boxes(panel_image: np.ndarray) -> list[tuple[tuple[int, int, int, int], np.ndarray]]:
     """
     Finds the coordinates of individual ingredient text boxes within a larger panel image.
@@ -127,7 +149,7 @@ def find_ingredient_boxes(panel_image: np.ndarray) -> list[tuple[tuple[int, int,
     # This is crucial for mapping to the correct keyboard keys
     boxes_and_contours.sort(key=lambda b: (b[0][0], b[0][1]))
 
-    log.info(f"Programmatically found {len(boxes_and_contours)} ingredient boxes.")
+    log.debug(f"Programmatically found {len(boxes_and_contours)} ingredient boxes.")
     return boxes_and_contours
 
 def crop_image_by_boxes(image: np.ndarray, boxes_and_contours: list[tuple[tuple[int, int, int, int], np.ndarray]]) -> list[np.ndarray]:
@@ -289,7 +311,7 @@ def parse_ingredient_list(ocr_data: dict, min_confidence: int = 50, return_confi
         else:
             results.append(phrase)
 
-    log.info(f"Parsed ingredient list with min confidence {min_confidence}: {results}")
+    log.debug(f"Parsed ingredient list with min confidence {min_confidence}: {results}")
     return results
 
 
@@ -321,7 +343,7 @@ def process_recipe_list_roi(roi: dict, return_confidence: bool = False) -> Union
     return parse_ingredient_list(ocr_data, min_confidence=min_conf)
 
 
-def process_ingredient_panel_roi(roi: dict) -> list[str]:
+def process_ingredient_panel_roi(roi: dict, return_confidence: bool = False) -> Union[list[str], list[tuple[str, float]]]:
     """
     Captures and OCRs the ingredient panel, returning a list of available ingredients.
     This is a high-level function that orchestrates the full pipeline.
@@ -330,7 +352,7 @@ def process_ingredient_panel_roi(roi: dict) -> list[str]:
     if image_cv is None:
         return []
 
-    all_parsed_phrases = []
+    results = []
     boxes_and_contours = find_ingredient_boxes(image_cv)
     if not boxes_and_contours:
         return []
@@ -338,16 +360,21 @@ def process_ingredient_panel_roi(roi: dict) -> list[str]:
     panel_images = crop_image_by_boxes(image_cv, boxes_and_contours)
 
     for item_image in panel_images:
+        
+        item_image = correct_shear(item_image, 0.15)
+
         normalized_img = normalize_image(item_image)
-        # Ingredient panel has light text on a dark background, so inversion is needed.
-        processed_image = binarize_image(normalized_img, invert_colors=True)
+        # The crop_image_by_boxes function places text on a white background.
+        # Therefore, no color inversion is needed.
+        processed_image = binarize_image(normalized_img, invert_colors=False)
         if processed_image is None or processed_image.size == 0:
             continue
 
         ocr_data = extract_text_from_image(processed_image, psm=7)
         min_conf = config.get_setting("bot_settings.min_confidence", default=50)
-        parsed_phrase = parse_single_phrase(ocr_data, min_confidence=min_conf)
+        parsed_phrase, confidence = parse_single_phrase(ocr_data, min_confidence=min_conf, return_confidence=True)
         if parsed_phrase:
-            all_parsed_phrases.append(parsed_phrase)
+            results.append((parsed_phrase, confidence) if return_confidence else parsed_phrase)
 
-    return all_parsed_phrases
+    log.debug(f"Processed ingredient panel. Found: {results}")
+    return results

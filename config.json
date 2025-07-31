@@ -24,16 +24,16 @@
             "horizontal_gap_threshold": 30
         },
         "recipe_trigger": {
-            "check_pixel_x": 462,
-            "check_pixel_y": 977,
+            "check_pixel_x": 454,
+            "check_pixel_y": 973,
             "expected_color_rgb": [54, 54, 54],
             "tolerance": 10
         },
         "ocr_upscale_factor": 2.0,
         "min_confidence": 50,
-        "main_loop_delay": 1.0,
+        "main_loop_delay": 0.1,
         "key_delay": 0.05,
-        "page_delay": 0.25
+        "page_delay": 0.05
     },
     "controls": {
         "input_keys": [

@@ -74,7 +74,7 @@ This plan outlines the implementation steps for creating the Minimum Viable Prod
 | TASK-018 | Create `tests/test_bot_logic.py` to unit test the decision-making module. | X | 2025-07-30 |
 | TASK-019 | In `test_bot_logic.py`, write unit tests for `map_ingredients_to_keys` with mock data to ensure correct key sequences are generated. | X | 2025-07-30 |
 | TASK-020 | In `main.py`, implement the main gameplay loop. The sequence should be: <br>1. **Load Config**: Load all ROIs (`recipe_list_roi`, `ingredient_panel_roi`) and control keys (`input_keys`, `page_turn_key`, `confirm_key`) from `config.json`. <br>2. **Wait for Recipe**: Start a retry loop (per `GUD-006`) to capture the `recipe_list_roi` and use OCR to get the full list of `remaining_steps`. <br>3. **Ingredient Page Loop**: While `remaining_steps` is not empty (and page turns < 2): <br>   a. Capture the `ingredient_panel_roi` and get the `available_on_page`. <br>   b. Call `map_ingredients_to_keys` to get keys to press and matched ingredients. <br>   c. Execute key presses and update `remaining_steps`. <br>   d. If steps remain, press the page-turn key and increment a counter. <br>4. **Serve Order**: Once the loop is complete, press the confirm/serve key. | X | 2025-07-30 |
-| TASK-021 | Integrate the logger throughout the application to log key decisions, actions, and errors. | | |
+| TASK-021 | Integrate the logger throughout the application to log key decisions, actions, and errors. | X | 2025-07-31 |
 
 ### Implementation Phase 4: Calibration & Setup
 

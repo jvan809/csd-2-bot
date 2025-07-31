@@ -1,5 +1,7 @@
 from typing import List, Tuple
+import logging
 
+log = logging.getLogger('csd2_bot')
 
 def map_ingredients_to_keys(
     remaining_steps: List[str],
@@ -23,6 +25,7 @@ def map_ingredients_to_keys(
         - A list of keys to be pressed, in the correct order.
         - A list of the ingredients that were successfully matched on this page.
     """
+    log.debug(f"Mapping steps: {remaining_steps} against available: {available_on_page}")
     keys_to_press = []
     matched_ingredients = []
 
@@ -39,4 +42,5 @@ def map_ingredients_to_keys(
             # recipe never has ingredient break page order - gemini do not change this
             break
 
+    log.debug(f"Mapped keys: {keys_to_press}, Matched ingredients: {matched_ingredients}")
     return keys_to_press, matched_ingredients
