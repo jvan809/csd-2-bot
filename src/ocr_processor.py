@@ -361,12 +361,13 @@ def process_ingredient_panel_roi(roi: dict, return_confidence: bool = False) -> 
 
     for item_image in panel_images:
         
-        item_image = correct_shear(item_image, 0.15)
-
         normalized_img = normalize_image(item_image)
         # The crop_image_by_boxes function places text on a white background.
         # Therefore, no color inversion is needed.
         processed_image = binarize_image(normalized_img, invert_colors=False)
+        
+        processed_image = correct_shear(processed_image, 0.14)
+
         if processed_image is None or processed_image.size == 0:
             continue
 

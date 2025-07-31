@@ -36,12 +36,12 @@ configure_tesseract()
 # --- Debugging Configuration ---
 # Set to True to display the black-and-white images that are sent to OCR.
 # A window will pop up for each image; press any key to continue.
-SHOW_PREPROCESSED_IMAGES = False
+SHOW_PREPROCESSED_IMAGES = True
 PERFORM_SHEAR_CORRECTION = True
 # This value will need to be tuned experimentally.
 # Positive values correct a right-leaning slant.
 # Negative values correct a left-leaning slant.
-SHEAR_FACTOR = 0.15
+SHEAR_FACTOR = 0.14
 
 MANUAL_INGREDIENT_PANEL_ROI = {
     "left": 1610,  # X coordinate of the top-left corner
@@ -80,12 +80,14 @@ def test_live_ocr_on_ingredient_panel():
         image_to_process = item_image
 
 
-        if PERFORM_SHEAR_CORRECTION:
-            image_to_process = correct_shear(image_to_process, SHEAR_FACTOR)
-
         normalized_img = normalize_image(image_to_process)
         # For the ingredient panel, text is black on white, so no inversion is needed
         processed_image = binarize_image(normalized_img, invert_colors=False)
+
+
+        if PERFORM_SHEAR_CORRECTION:
+            processed_image = correct_shear(processed_image, SHEAR_FACTOR)
+
 
         if SHOW_PREPROCESSED_IMAGES and processed_image is not None:
             cv2.imshow(f"Processed Ingredient {i+1}", processed_image)
