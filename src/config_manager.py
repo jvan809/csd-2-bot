@@ -36,6 +36,7 @@ class ConfigManager:
                     "tolerance": 10
                 },
                 "ocr_upscale_factor": 2.0,
+                "right_panel_shear_factor": 0.14,
                 "min_confidence": 50,
                 "logging_level": "INFO",
                 "main_loop_delay": 1.0,

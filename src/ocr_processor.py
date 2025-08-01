@@ -1,114 +1,20 @@
 import cv2
-import pytesseract
 import numpy as np
 import logging
-from pytesseract import Output
 from typing import Union
 from src.config_manager import ConfigManager
 from src.screen_capture import capture_region
+from src.image_preprocessor import ImagePreprocessor
+from src.text_parser import TextParser
 
 log = logging.getLogger('csd2_bot')
 
 
 class OcrProcessor:
+    """Orchestrates screen capture, image processing, and text recognition for the game."""
     def __init__(self, config_manager: ConfigManager):
         self.config_manager = config_manager
-        self._configure_tesseract()
-
-    def _configure_tesseract(self):
-        """Sets the Tesseract command path from the config file."""
-        try:
-            tesseract_path = self.config_manager.get_setting("bot_settings.tesseract_path")
-            if tesseract_path:
-                pytesseract.pytesseract.tesseract_cmd = tesseract_path
-            log.debug(f"Tesseract path set to: {pytesseract.pytesseract.tesseract_cmd}")
-        except Exception as e:
-            log.error(f"Could not set Tesseract path from config. Ensure it's in your system PATH. Error: {e}")
-
-    def _normalize_image(self, image: np.ndarray) -> np.ndarray:
-        """
-        Normalizes an image for OCR by resizing to a standard height and adding padding.
-        This is typically used for images of varying sizes, like cropped panel items.
-
-        Args:
-            image: The input image as a NumPy array.
-
-        Returns:
-            The normalized image.
-        """
-        # 1. Resize the image to a fixed height to improve OCR accuracy.
-        # Tesseract works best with text that is at least 30px high.
-        target_h = 50
-        h, w = image.shape[:2]
-        scale_ratio = target_h / h
-        target_w = int(w * scale_ratio)
-        resized_image = cv2.resize(image, (target_w, target_h), interpolation=cv2.INTER_CUBIC)
-
-        # 2. Add a white border (padding) to prevent characters from touching the edge.
-        padding = 10
-        num_channels = resized_image.shape[2] if len(resized_image.shape) > 2 else 1
-        border_color = [255] * num_channels if num_channels > 1 else 255
-            
-        padded_image = cv2.copyMakeBorder(resized_image, padding, padding, padding, padding, cv2.BORDER_CONSTANT, value=border_color)
-        
-        log.debug("Image normalized with resizing and padding.")
-        return padded_image
-
-    def _binarize_image(self, image: np.ndarray, invert_colors: bool = False) -> np.ndarray | None:
-        """
-        Converts an image to a binary (black and white) format for OCR using
-        grayscale conversion and Otsu's thresholding.
-
-        Args:
-            image: The input image as a NumPy array.
-            invert_colors: If True, inverts the threshold for light text on dark backgrounds.
-
-        Returns:
-            The processed black-and-white image, or None if the input was invalid.
-        """
-        if image is None:
-            log.error("Cannot binarize a None image.")
-            return None
-
-        # 1. Convert to grayscale, handling different channel counts.
-        if len(image.shape) == 3 and image.shape[2] == 4:
-            gray = cv2.cvtColor(image, cv2.COLOR_BGRA2GRAY)
-        elif len(image.shape) == 3 and image.shape[2] == 3:
-            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        elif len(image.shape) == 2:
-            gray = image  # Already grayscale
-        else:
-            log.error(f"Unsupported image shape for binarization: {image.shape}")
-            return None
-
-        # 2. Apply a threshold using Otsu's method to automatically find the best value.
-        threshold_type = cv2.THRESH_BINARY_INV if invert_colors else cv2.THRESH_BINARY
-        _, processed_image = cv2.threshold(gray, 0, 255, threshold_type + cv2.THRESH_OTSU)
-
-        log.debug(f"Image binarized for OCR. Inverted colors: {invert_colors}")
-        return processed_image
-
-    def _correct_shear(self, image: np.ndarray, shear_factor: float) -> np.ndarray:
-        """
-        Corrects for horizontal shear in an image, common with italic-style fonts.
-
-        Args:
-            image: The input image with sheared text.
-            shear_factor: The amount of shear to apply. Positive values correct a
-                        right-leaning slant, negative values correct a left-leaning slant.
-
-        Returns:
-            The de-sheared image.
-        """
-        if shear_factor == 0.0:
-            return image
-
-        (h, w) = image.shape[:2]
-        
-        M = np.array([[1, shear_factor, 0], [0, 1, 0]], dtype=np.float32)
-
-        log.debug(f"correct_shear: Applying shear factor of {shear_factor:.2f}.")
-        return cv2.warpAffine(image, M, (w, h), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE)
+        self.text_parser = TextParser(config_manager)
 
     def _find_ingredient_boxes(self, panel_image: np.ndarray) -> list[tuple[tuple[int, int, int, int], np.ndarray]]:
         """
@@ -183,142 +89,6 @@ class OcrProcessor:
             cropped_images.append(masked_image)
         return cropped_images
 
-    def _extract_text_from_image(self, image: np.ndarray, psm: int = 7) -> dict:
-        """
-        Extracts structured word data from a pre-processed image using Tesseract.
-
-        Args:
-            image: The pre-processed black-and-white image.
-            psm: The Page Segmentation Mode to use. Defaults to 7 (line of text).
-
-        Returns:
-            A dictionary containing structured data about the recognized words.
-        """
-        if image is None:
-            log.error("Cannot extract text from a None image.")
-            return {}
-        try:
-            # Base Tesseract configuration
-            custom_config = f'--oem 3 --psm {psm}'
-
-            data = pytesseract.image_to_data(image, config=custom_config, output_type=Output.DICT)
-            log.debug(f"Extracted structured text data with {len(data.get('text', []))} potential words.")
-            return data
-        except pytesseract.TesseractNotFoundError:
-            log.error("Tesseract executable not found. Ensure it is installed and the path is configured correctly.")
-            return {}
-        except Exception as e:
-            log.error(f"An error occurred during OCR: {e}")
-            return {}
-
-    def _parse_single_phrase(self, ocr_data: dict, min_confidence: int = 50, return_confidence: bool = False) -> Union[str, tuple[str, float]]:
-        """
-        Parses OCR data assuming it represents a single phrase (e.g., one ingredient name).
-        It concatenates all words with sufficient confidence into a single string.
-
-        Args:
-            ocr_data: The structured data dictionary from Pytesseract.
-            min_confidence: The minimum confidence score to include a word.
-            return_confidence: If True, returns a tuple with the phrase and its average confidence.
-
-        Returns:
-            A single string representing the recognized phrase, or a tuple with the phrase and confidence.
-        """
-        if not ocr_data or not ocr_data.get('text'):
-            return ("", 0.0) if return_confidence else ""
-
-        words = []
-        confidences = []
-        for i in range(len(ocr_data['text'])):
-            confidence = int(ocr_data['conf'][i])
-            if confidence >= min_confidence:
-                text = ocr_data['text'][i].strip()
-                if text:
-                    words.append(text)
-                    confidences.append(confidence)
-
-        result = " ".join(words)
-        log.debug(f"Parsed single phrase with min confidence {min_confidence}: '{result}'")
-        
-        if return_confidence:
-            avg_confidence = sum(confidences) / len(confidences) if confidences else 0.0
-            return result, avg_confidence
-        else:
-            return result
-
-    def _parse_ingredient_list(self, ocr_data: dict, min_confidence: int = 50, return_confidence: bool = False) -> Union[list[str], list[tuple[str, float]]]:
-        """
-        Parses structured OCR data from a recipe list, intelligently grouping words
-        into distinct ingredients based on proximity.
-
-        Args:
-            ocr_data: The structured data dictionary from Pytesseract.
-            min_confidence: The minimum confidence score to include a word.
-            return_confidence: If True, returns a list of tuples with phrase and average confidence.
-
-        Returns:
-            A list of strings or a list of (string, float) tuples.
-        """
-        if not ocr_data or not ocr_data.get('text'):
-            return []
-
-        horizontal_gap_threshold = self.config_manager.get_setting("bot_settings.panel_detection.horizontal_gap_threshold", default=30)
-
-        # 1. Collect all valid words with their properties into a list of dicts
-        words = []
-        for i in range(len(ocr_data['text'])):
-            confidence = int(ocr_data['conf'][i])
-            text = ocr_data['text'][i].strip()
-            if confidence >= min_confidence and text:
-                words.append({
-                    'text': text,
-                    'left': int(ocr_data['left'][i]),
-                    'width': int(ocr_data['width'][i]),
-                    'line_num': int(ocr_data['line_num'][i]),
-                    'block_num': int(ocr_data['block_num'][i]),
-                    'conf': confidence
-                })
-
-        if not words:
-            return []
-
-        # 2. Sort words by reading order (block, line, then horizontal position)
-        words.sort(key=lambda w: (w['block_num'], w['line_num'], w['left']))
-
-        # 3. Group words into ingredients based on proximity
-        results = []
-        current_ingredient_words = [words[0]['text']]
-        current_ingredient_confs = [words[0]['conf']]
-        for i in range(1, len(words)):
-            prev_word, current_word = words[i-1], words[i]
-            same_line = current_word['block_num'] == prev_word['block_num'] and current_word['line_num'] == prev_word['line_num']
-
-            if same_line and (current_word['left'] - (prev_word['left'] + prev_word['width'])) < horizontal_gap_threshold:
-                current_ingredient_words.append(current_word['text'])
-                current_ingredient_confs.append(current_word['conf'])
-            else:
-                phrase = " ".join(current_ingredient_words)
-                if return_confidence:
-                    avg_conf = sum(current_ingredient_confs) / len(current_ingredient_confs) if current_ingredient_confs else 0.0
-                    results.append((phrase, avg_conf))
-                else:
-                    results.append(phrase)
-                
-                current_ingredient_words = [current_word['text']]
-                current_ingredient_confs = [current_word['conf']]
-
-        if current_ingredient_words:
-            phrase = " ".join(current_ingredient_words)
-            if return_confidence:
-                avg_conf = sum(current_ingredient_confs) / len(current_ingredient_confs) if current_ingredient_confs else 0.0
-                results.append((phrase, avg_conf))
-            else:
-                results.append(phrase)
-
-        log.debug(f"Parsed ingredient list with min confidence {min_confidence}: {results}")
-        return results
-
-
     def process_recipe_list_roi(self, roi: dict, return_confidence: bool = False) -> Union[list[str], list[tuple[str, float]]]:
         """
         Captures and OCRs the recipe list region, returning a list of required steps.
@@ -330,21 +100,17 @@ class OcrProcessor:
 
         # Upscale the image to improve OCR on potentially small text
         scale_factor = self.config_manager.get_setting("bot_settings.ocr_upscale_factor", default=1.0)
-        if scale_factor > 1.0:
-            log.debug(f"Upscaling recipe list image by factor of {scale_factor}")
-            width = int(image_cv.shape[1] * scale_factor)
-            height = int(image_cv.shape[0] * scale_factor)
-            image_cv = cv2.resize(image_cv, (width, height), interpolation=cv2.INTER_CUBIC)
+        upscaled_image = ImagePreprocessor.upscale(image_cv, scale_factor)
 
         # Recipe list has light text on a dark background, so inversion is needed.
-        processed_image = self._binarize_image(image_cv, invert_colors=True)
+        processed_image = ImagePreprocessor.binarize(upscaled_image, invert_colors=True)
         if processed_image is None or processed_image.size == 0:
             return []
 
         # Use PSM 6 for a single uniform block of text.
-        ocr_data = self._extract_text_from_image(processed_image, psm=6)
+        ocr_data = self.text_parser.extract_structured_data(processed_image, psm=6)
         min_conf = self.config_manager.get_setting("bot_settings.min_confidence", default=50)
-        return self._parse_ingredient_list(ocr_data, min_confidence=min_conf)
+        return self.text_parser.parse_as_ingredient_list(ocr_data, min_confidence=min_conf, return_confidence=return_confidence)
 
 
     def process_ingredient_panel_roi(self, roi: dict, return_confidence: bool = False) -> Union[list[str], list[tuple[str, float]]]:
@@ -365,19 +131,20 @@ class OcrProcessor:
 
         for item_image in panel_images:
             
-            normalized_img = self._normalize_image(item_image)
+            normalized_img = ImagePreprocessor.normalize(item_image)
             # The crop_image_by_boxes function places text on a white background.
             # Therefore, no color inversion is needed.
-            processed_image = self._binarize_image(normalized_img, invert_colors=False)
+            processed_image = ImagePreprocessor.binarize(normalized_img, invert_colors=False)
             
-            processed_image = self._correct_shear(processed_image, 0.14)
+            shear_factor = self.config_manager.get_setting("bot_settings.right_panel_shear_factor", default=0.14)
+            processed_image = ImagePreprocessor.correct_shear(processed_image, shear_factor)
 
             if processed_image is None or processed_image.size == 0:
                 continue
 
-            ocr_data = self._extract_text_from_image(processed_image, psm=7)
+            ocr_data = self.text_parser.extract_structured_data(processed_image, psm=7)
             min_conf = self.config_manager.get_setting("bot_settings.min_confidence", default=50)
-            parsed_phrase, confidence = self._parse_single_phrase(ocr_data, min_confidence=min_conf, return_confidence=True)
+            parsed_phrase, confidence = self.text_parser.parse_as_single_phrase(ocr_data, min_confidence=min_conf, return_confidence=True)
             if parsed_phrase:
                 results.append((parsed_phrase, confidence) if return_confidence else parsed_phrase)
 
