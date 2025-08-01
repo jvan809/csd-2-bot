@@ -3,93 +3,89 @@ import pydirectinput
 from src.logger_setup import setup_logger
 from src.config_manager import ConfigManager
 from src.input_handler import press_key
-from src.ocr_processor import configure_tesseract, process_recipe_list_roi, process_ingredient_panel_roi
+from src.ocr_processor import OcrProcessor
 from src.bot_logic import map_ingredients_to_keys
 import logging
 
-def run_game_loop(config_manager: ConfigManager):
-    """
+class CSD2Bot:
+    def __init__(self, config_manager: ConfigManager, ocr_processor: OcrProcessor):
+        self.log = logging.getLogger('csd2_bot')
+        self.config_manager = config_manager
+        self.ocr = ocr_processor
 
-    Runs one full cycle of the gameplay loop:
-    1. Waits for a new recipe.
-    2. Processes all pages of ingredients for that recipe.
-    3. Serves the order.
-    """
-    log = logging.getLogger('csd2_bot')
+        # --- Load Config Settings ---
+        self.recipe_roi = self.config_manager.get_setting("ocr_regions.recipe_list_roi")
+        self.panel_roi = self.config_manager.get_setting("ocr_regions.ingredient_panel_roi")
+        self.input_keys = self.config_manager.get_setting("controls.input_keys")
+        self.page_turn_key = self.config_manager.get_setting("controls.page_turn_key")
+        self.confirm_key = self.config_manager.get_setting("controls.confirm_key")
+        self.loop_delay = self.config_manager.get_setting("bot_settings.main_loop_delay", default=1.0)
+        
+        trigger_config = self.config_manager.get_setting("bot_settings.recipe_trigger")
+        self.trigger_x = trigger_config.get("check_pixel_x")
+        self.trigger_y = trigger_config.get("check_pixel_y")
+        self.expected_color = tuple(trigger_config.get("expected_color_rgb"))
+        self.tolerance = trigger_config.get("tolerance", 10)
 
-    # --- 1. Load Config ---
-    recipe_roi = config_manager.get_setting("ocr_regions.recipe_list_roi")
-    panel_roi = config_manager.get_setting("ocr_regions.ingredient_panel_roi")
-    input_keys = config_manager.get_setting("controls.input_keys")
-    page_turn_key = config_manager.get_setting("controls.page_turn_key")
-    confirm_key = config_manager.get_setting("controls.confirm_key")
-    loop_delay = config_manager.get_setting("bot_settings.main_loop_delay", default=1.0)
-    
-    # --- 2. Wait for Recipe ---
-    log.info("Waiting for a new recipe...")
-    trigger_config = config_manager.get_setting("bot_settings.recipe_trigger")
-    trigger_x = trigger_config.get("check_pixel_x")
-    trigger_y = trigger_config.get("check_pixel_y")
-    expected_color = tuple(trigger_config.get("expected_color_rgb"))
-    tolerance = trigger_config.get("tolerance", 10)
+    def run(self):
+        """Main bot loop. Waits for a recipe and processes it."""
+        self.log.info(f"Waiting for a new recipe. Loop delay: {self.loop_delay}s")
+        self._wait_for_recipe_trigger()
 
-    while not pyautogui.pixelMatchesColor(trigger_x, trigger_y, expected_color, tolerance=tolerance):
-        pyautogui.sleep(loop_delay) # Wait before trying again
+        self.log.debug(f"Recipe trigger detected at ({self.trigger_x}, {self.trigger_y}). Reading recipe...")
+        remaining_steps = self.ocr.process_recipe_list_roi(self.recipe_roi)
 
-    log.debug(f"Recipe trigger detected at ({trigger_x}, {trigger_y}). Reading recipe...")
-    remaining_steps = []
-    remaining_steps = process_recipe_list_roi(recipe_roi)
-    if not remaining_steps:
-        log.warning("Recipe card detected, but failed to read any recipe text. Skipping this attempt.")
-        return
+        if not remaining_steps:
+            self.log.warning("Recipe card detected, but failed to read any recipe text. Skipping this attempt.")
+            return
 
-    log.info(f"New recipe detected! Steps: {remaining_steps}")
+        self.log.info(f"New recipe detected! Steps: {remaining_steps}")
+        self._process_recipe(remaining_steps)
 
-    # --- 3. Ingredient Page Loop ---
-    page_turns = 0
-    max_page_turns = 2 # Initial page + 2 turns
+    def _wait_for_recipe_trigger(self):
+        """Waits for the pixel color that indicates a new recipe is available."""
+        while not pyautogui.pixelMatchesColor(self.trigger_x, self.trigger_y, self.expected_color, tolerance=self.tolerance):
+            pyautogui.sleep(self.loop_delay)
 
-    while remaining_steps and page_turns <= max_page_turns:
-        log.debug(f"Processing page {page_turns + 1}. Remaining steps: {remaining_steps}")
+    def _process_recipe(self, remaining_steps: list):
+        """Processes all ingredients for the current recipe, turning pages as needed."""
+        page_turns = 0
+        max_page_turns = 2  # Initial page + 2 turns
 
-        # a. Get available ingredients
-        available_on_page = process_ingredient_panel_roi(panel_roi)
-        log.info(f"Available on page: {available_on_page}")
+        while remaining_steps and page_turns <= max_page_turns:
+            self.log.debug(f"Processing page {page_turns + 1}. Remaining steps: {remaining_steps}")
 
-        # b. Map steps to keys
-        keys_to_press, matched_ingredients = map_ingredients_to_keys(remaining_steps, available_on_page, input_keys)
-        log.info(f"Matched ingredients: {matched_ingredients}. Keys to press: {keys_to_press}")
+            available_on_page = self.ocr.process_ingredient_panel_roi(self.panel_roi)
+            self.log.info(f"Available on page: {available_on_page}")
 
-        # c. Execute key presses and update state
-        if keys_to_press:
-            for key in keys_to_press:
-                press_key(key)
+            keys_to_press, matched_ingredients = map_ingredients_to_keys(remaining_steps, available_on_page, self.input_keys)
+            self.log.info(f"Matched ingredients: {matched_ingredients}. Keys to press: {keys_to_press}")
 
-            # Remove matched ingredients from the remaining steps, handling duplicates correctly
-            temp_matched = list(matched_ingredients)
-            new_remaining_steps = []
-            for step in remaining_steps:
-                if step in temp_matched:
-                    temp_matched.remove(step) # Remove one instance of the matched step
-                else:
-                    new_remaining_steps.append(step)
-            remaining_steps = new_remaining_steps
+            if keys_to_press:
+                for key in keys_to_press:
+                    press_key(key)
 
-        # d. Turn page if necessary
-        if remaining_steps and page_turns < max_page_turns:
-            log.debug("There are remaining steps, turning page.")
-            press_key(page_turn_key)
-            page_turns += 1
+                # Remove matched ingredients (no duplicates is guarenteed by the game)
+                temp_matched = list(matched_ingredients)
+                remaining_steps = [step for step in remaining_steps if not (step in temp_matched)]
+
+            if remaining_steps and page_turns < max_page_turns:
+                self.log.debug("There are remaining steps, turning page.")
+                press_key(self.page_turn_key)
+                page_turns += 1
+            else:
+                break  # No more steps or max pages reached
+
+        self._serve_order(remaining_steps)
+
+    def _serve_order(self, remaining_steps: list):
+        """Presses the confirm key if the recipe is complete, otherwise logs a warning."""
+        if not remaining_steps:
+            self.log.info("Recipe complete. Pressing confirm key.")
+            press_key(self.confirm_key)
         else:
-            break # No more steps or max pages reached
-
-    # --- 4. Serve Order ---
-    if not remaining_steps:
-        log.info("Recipe complete. Pressing confirm key.")
-        press_key(confirm_key)
-    else:
-        log.warning(f"Finished recipe attempt with remaining steps: {remaining_steps}. Manual intervention may be needed.")
-        pyautogui.sleep(5)
+            self.log.warning(f"Finished recipe attempt with remaining steps: {remaining_steps}. Manual intervention may be needed.")
+            pyautogui.sleep(5)
 
 def main():      
     """Main application entry point."""
@@ -100,7 +96,7 @@ def main():
     log = setup_logger(config_manager)
 
     # 3. Configure Tesseract now that the logger is ready
-    configure_tesseract()
+    ocr_processor = OcrProcessor(config_manager)
 
     # --- Configure Input Library ---
     # Lower the default pause in pydirectinput for faster key presses.
@@ -117,15 +113,13 @@ def main():
     else:
         pyautogui.FAILSAFE = False
         log.warning("PyAutoGUI failsafe is disabled.")
+        
+    bot = CSD2Bot(config_manager, ocr_processor)
 
     try:
-        # Main bot loop
         log.info("Bot is running. Press Ctrl+C in the console to exit.")
         while True:
-            run_game_loop(config_manager)
-            delay = config_manager.get_setting("bot_settings.main_loop_delay", default=1.0)
-            log.info(f"Loop finished. Waiting {delay}s before checking for a new recipe.")
-            pyautogui.sleep(delay)
+            bot.run() # delay is in this function so no need for sleep here
 
     except KeyboardInterrupt:
         log.info("Bot stopped by user (Ctrl+C).")

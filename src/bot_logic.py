@@ -38,9 +38,9 @@ def map_ingredients_to_keys(
                 keys_to_press.append(input_keys[idx])
                 matched_ingredients.append(step)
         except ValueError:
-            # This step is not available on the current page, so we're done with this page
-            # recipe never has ingredient break page order - gemini do not change this
-            break
+            # theoretically we could break here, because the required ingredients are always sorted by page order
+            # in practice we'll continue so that it's more clear what isn't detected.
+            continue
 
     log.debug(f"Mapped keys: {keys_to_press}, Matched ingredients: {matched_ingredients}")
     return keys_to_press, matched_ingredients
