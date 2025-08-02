@@ -11,10 +11,61 @@
             "left": 1610,
             "width": 305,
             "height": 364
-        }
+        },
+        "ingredient_slot_rois": [
+            {
+                "top": 61,
+                "left": 3,
+                "width": 147,
+                "height": 27
+            },
+            {
+                "top": 151,
+                "left": 3,
+                "width": 147,
+                "height": 27
+            },
+            {
+                "top": 241,
+                "left": 3,
+                "width": 147,
+                "height": 27
+            },
+            {
+                "top": 331,
+                "left": 3,
+                "width": 147,
+                "height": 27
+            },
+            {
+                "top": 61,
+                "left": 157,
+                "width": 147,
+                "height": 27
+            },
+            {
+                "top": 151,
+                "left": 157,
+                "width": 147,
+                "height": 27
+            },
+            {
+                "top": 241,
+                "left": 157,
+                "width": 147,
+                "height": 27
+            },
+            {
+                "top": 331,
+                "left": 157,
+                "width": 147,
+                "height": 27
+            }
+        ]
     },
     "bot_settings": {
         "tesseract_path": "C:/Program Files/Tesseract-OCR/tesseract.exe",
+        "ingredient_mask_path": "assets\\masks\\ingredient_mask.png",
         "enable_failsafe": true,
         "panel_detection": {
             "threshold_value": 245,

@@ -18,10 +18,12 @@ class ConfigManager:
         return {
             "ocr_regions": { # This structure is updated by setup.py or manual config
                 "recipe_list_roi": {"top": 0, "left": 0, "width": 0, "height": 0},
-                "ingredient_panel_roi": {"top": 0, "left": 0, "width": 0, "height": 0}
+                "ingredient_panel_roi": {"top": 0, "left": 0, "width": 0, "height": 0},
+                "ingredient_slot_rois" : None
             },
             "bot_settings": {
                 "tesseract_path": "C:/Program Files/Tesseract-OCR/tesseract.exe",
+                "ingredient_mask_path": "",
                 "enable_failsafe": True,
                 "panel_detection": {
                     "threshold_value": 245,

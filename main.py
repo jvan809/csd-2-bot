@@ -20,7 +20,8 @@ class CSD2Bot:
         self.page_turn_key = self.config_manager.get_setting("controls.page_turn_key")
         self.confirm_key = self.config_manager.get_setting("controls.confirm_key")
         self.loop_delay = self.config_manager.get_setting("bot_settings.main_loop_delay", default=1.0)
-        
+        self.ingredient_slots = self.config_manager.get_setting("ocr_regions.ingredient_slot_rois")
+
         trigger_config = self.config_manager.get_setting("bot_settings.recipe_trigger")
         self.trigger_x = trigger_config.get("check_pixel_x")
         self.trigger_y = trigger_config.get("check_pixel_y")
@@ -29,7 +30,7 @@ class CSD2Bot:
 
     def run(self):
         """Main bot loop. Waits for a recipe and processes it."""
-        self.log.info(f"Waiting for a new recipe. Loop delay: {self.loop_delay}s")
+        self.log.info(f"Waiting for a new recipe...")
         self._wait_for_recipe_trigger()
 
         self.log.debug(f"Recipe trigger detected at ({self.trigger_x}, {self.trigger_y}). Reading recipe...")
@@ -37,6 +38,7 @@ class CSD2Bot:
 
         if not remaining_steps:
             self.log.warning("Recipe card detected, but failed to read any recipe text. Skipping this attempt.")
+            pyautogui.sleep(self.loop_delay)
             return
 
         self.log.info(f"New recipe detected! Steps: {remaining_steps}")
@@ -50,12 +52,12 @@ class CSD2Bot:
     def _process_recipe(self, remaining_steps: list):
         """Processes all ingredients for the current recipe, turning pages as needed."""
         page_turns = 0
-        max_page_turns = 2  # Initial page + 2 turns
+        max_page_turns = 2  # Initial page + 2 turns - feature of game so no config
 
         while remaining_steps and page_turns <= max_page_turns:
             self.log.debug(f"Processing page {page_turns + 1}. Remaining steps: {remaining_steps}")
 
-            available_on_page = self.ocr.process_ingredient_panel_roi(self.panel_roi)
+            available_on_page = self.ocr.process_ingredient_panel_roi(self.panel_roi, self.ingredient_slots)
             self.log.info(f"Available on page: {available_on_page}")
 
             keys_to_press, matched_ingredients = map_ingredients_to_keys(remaining_steps, available_on_page, self.input_keys)
@@ -65,9 +67,9 @@ class CSD2Bot:
                 for key in keys_to_press:
                     press_key(key)
 
-                # Remove matched ingredients (no duplicates is guarenteed by the game)
-                temp_matched = list(matched_ingredients)
-                remaining_steps = [step for step in remaining_steps if not (step in temp_matched)]
+                # Remove matched ingredients
+                matched_set = set(matched_ingredients)
+                remaining_steps = [step for step in remaining_steps if step not in matched_set]
 
             if remaining_steps and page_turns < max_page_turns:
                 self.log.debug("There are remaining steps, turning page.")

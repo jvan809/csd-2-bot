@@ -15,79 +15,10 @@ class OcrProcessor:
     def __init__(self, config_manager: ConfigManager):
         self.config_manager = config_manager
         self.text_parser = TextParser(config_manager)
+        label_mask_path = self.config_manager.get_setting("bot_settings.ingredient_mask_path")
+        self.label_mask = cv2.imread(label_mask_path, cv2.IMREAD_GRAYSCALE)
 
-    def _find_ingredient_boxes(self, panel_image: np.ndarray) -> list[tuple[tuple[int, int, int, int], np.ndarray]]:
-        """
-        Finds the coordinates of individual ingredient text boxes within a larger panel image.
-        This is used for panels with multiple distinct items (the available ingredients list).
-
-        Args:
-            panel_image: The image of the entire ingredients panel.
-
-        Returns:
-            A list of tuples, where each tuple contains the bounding box (x, y, w, h)
-            and the corresponding contour, sorted in column-first reading order.
-        """
-        if panel_image is None:
-            log.error("Cannot find boxes in a None image.")
-            return []
-
-        threshold_val = self.config_manager.get_setting("bot_settings.panel_detection.threshold_value", default=245)
-        min_area = self.config_manager.get_setting("bot_settings.panel_detection.min_area", default=1000)
-        min_aspect_ratio = self.config_manager.get_setting("bot_settings.panel_detection.min_aspect_ratio", default=2.0)
-
-        # 1. Pre-process the image to find the white background of the text boxes.
-        gray = cv2.cvtColor(panel_image, cv2.COLOR_BGRA2GRAY)
-        _, thresh = cv2.threshold(gray, threshold_val, 255, cv2.THRESH_BINARY)
-
-        # 2. Find contours of the white boxes.
-        contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-        boxes_and_contours = []
-        for contour in contours:
-            # 3. Get the bounding box and filter based on size/shape to find plausible text boxes.
-            rect = cv2.boundingRect(contour)
-            x, y, w, h = rect
-            area = w * h
-            aspect_ratio = w / float(h) if h > 0 else 0
-
-            # These filter values are heuristics designed to find boxes that are wider than they are tall.
-            if min_area < area and min_aspect_ratio < aspect_ratio:
-                boxes_and_contours.append((rect, contour))
-
-        # 4. Sort boxes in column reading order (left top-to-bottom, then right top-to-bottom).
-        # This is crucial for mapping to the correct keyboard keys
-        boxes_and_contours.sort(key=lambda b: (b[0][0], b[0][1]))
-
-        log.debug(f"Programmatically found {len(boxes_and_contours)} ingredient boxes.")
-        return boxes_and_contours
-
-    def _crop_image_by_boxes(self, image: np.ndarray, boxes_and_contours: list[tuple[tuple[int, int, int, int], np.ndarray]]) -> list[np.ndarray]:
-        """
-        Crops a larger panel into sub-images of UI elements using bounding boxes and
-        applies a mask derived from the corresponding contour to isolate the element.
-        """
-        cropped_images = []
-        for rect, contour in boxes_and_contours:
-            x, y, w, h = rect
-            # 1. Crop the original image to the bounding rectangle of the contour.
-            cropped_img = image[y:y+h, x:x+w].copy()
-
-            # 2. Create a mask from the CONVEX HULL of the contour.
-            # The convex hull creates a solid shape around the element, ignoring holes
-            # caused by text, which prevents letters from being clipped.
-            hull = cv2.convexHull(contour)
-            mask = np.zeros(cropped_img.shape[:2], dtype=np.uint8)
-            shifted_hull = hull - (x, y) # Adjust hull to the cropped image's coordinate system.
-            cv2.drawContours(mask, [shifted_hull], -1, (255), -1) # Fill the hull shape with white.
-
-            # 3. Composite the image to place the UI element on a pure white background.
-            # This robustly removes the rounded corner artifacts without needing extra flood-fills.
-            foreground = cv2.bitwise_and(cropped_img, cropped_img, mask=mask)
-            background = cv2.bitwise_and(np.full(cropped_img.shape, 255, dtype=cropped_img.dtype), np.full(cropped_img.shape, 255, dtype=cropped_img.dtype), mask=cv2.bitwise_not(mask))
-            masked_image = cv2.add(foreground, background)
-            cropped_images.append(masked_image)
-        return cropped_images
+    
 
     def process_recipe_list_roi(self, roi: dict, return_confidence: bool = False) -> Union[list[str], list[tuple[str, float]]]:
         """
@@ -113,40 +44,65 @@ class OcrProcessor:
         return self.text_parser.parse_as_ingredient_list(ocr_data, min_confidence=min_conf, return_confidence=return_confidence)
 
 
-    def process_ingredient_panel_roi(self, roi: dict, return_confidence: bool = False) -> Union[list[str], list[tuple[str, float]]]:
+    def process_ingredient_panel_roi(self, ingredient_panel_roi: dict, relative_ingredient_slot_rois: list[dict], return_confidence: bool = False) -> Union[list[str], list[tuple[str, float]]]:
         """
         Captures and OCRs the ingredient panel, returning a list of available ingredients.
         This is a high-level function that orchestrates the full pipeline.
+
+        Args:
+            ingredient_panel_roi: The ROI for the entire ingredient panel.
+            relative_ingredient_slot_rois: A list of ROIs for each ingredient slot,
+                                           relative to the main panel's ROI.
+            return_confidence: Whether to return confidence scores with the text.
         """
-        image_cv = capture_region(roi)  # Returns a BGRA numpy array
-        if image_cv is None:
+        panel_image = capture_region(ingredient_panel_roi)
+        if panel_image is None:
             return []
 
         results = []
-        boxes_and_contours = self._find_ingredient_boxes(image_cv)
-        if not boxes_and_contours:
-            return []
+        end_of_panel = False
+        for slot_roi in relative_ingredient_slot_rois:
+            y, x, w, h = slot_roi['top'], slot_roi['left'], slot_roi['width'], slot_roi['height']
+            item_image = panel_image[y:y+h, x:x+w]
 
-        panel_images = self._crop_image_by_boxes(image_cv, boxes_and_contours)
+            if item_image.size == 0:
+                log.warning(f"Ingredient slot ROI is malformed or has size 0: {slot_roi}")
+                results.append(("", 0.0) if return_confidence else "")
+                continue
 
-        for item_image in panel_images:
-            
-            normalized_img = ImagePreprocessor.normalize(item_image)
-            # The crop_image_by_boxes function places text on a white background.
-            # Therefore, no color inversion is needed.
+            # Heuristic to detect if an ingredient slot is empty. Empty slots are
+            # assumed to be a solid grey, whereas full slots have black text on a white background
+            # We check the top-left pixel's BGR values, ignoring alpha.
+            top_left_pixel = item_image[0, 0]
+            is_white = np.all(top_left_pixel[:3] == 255)
+            is_black = np.all(top_left_pixel[:3] == 0)
+            if not is_white and not is_black:
+                log.debug("Skipping empty ingredient slot (detected as non-white/black).")
+                end_of_panel = True
+                results.append(("", 0.0) if return_confidence else "")
+                continue
+            elif end_of_panel:
+                # Thought it was the end of the panel but we were wrong
+                log.warning("Missed Panel")
+                end_of_panel = False
+
+            # Where the mask is white, use the pixel from item_image. Where black, use white.
+            masked_image = np.where(self.label_mask[:, :, None] == 255, item_image, 255)
+
+            normalized_img = ImagePreprocessor.normalize(masked_image)
             processed_image = ImagePreprocessor.binarize(normalized_img, invert_colors=False)
             
             shear_factor = self.config_manager.get_setting("bot_settings.right_panel_shear_factor", default=0.14)
             processed_image = ImagePreprocessor.correct_shear(processed_image, shear_factor)
-
-            if processed_image is None or processed_image.size == 0:
-                continue
 
             ocr_data = self.text_parser.extract_structured_data(processed_image, psm=7)
             min_conf = self.config_manager.get_setting("bot_settings.min_confidence", default=50)
             parsed_phrase, confidence = self.text_parser.parse_as_single_phrase(ocr_data, min_confidence=min_conf, return_confidence=True)
             if parsed_phrase:
                 results.append((parsed_phrase, confidence) if return_confidence else parsed_phrase)
+            else:
+                log.warning("Label detected but no text found with sufficient confidence.")
+                results.append(("", 0.0) if return_confidence else "")
 
         log.debug(f"Processed ingredient panel. Found: {results}")
         return results

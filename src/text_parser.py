@@ -29,7 +29,8 @@ class TextParser:
             log.error("Cannot extract text from a None image.")
             return {}
         try:
-            custom_config = f'--oem 3 --psm {psm}'
+            
+            custom_config = f'--oem 3 --psm {psm} -c tessedit_char_whitelist= 0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
             data = pytesseract.image_to_data(image, config=custom_config, output_type=Output.DICT)
             log.debug(f"Extracted structured text data with {len(data.get('text', []))} potential words.")
             return data
@@ -40,18 +41,34 @@ class TextParser:
             log.error(f"An error occurred during OCR: {e}")
             return {}
 
-    def parse_as_single_phrase(self, ocr_data: dict, min_confidence: int, return_confidence: bool = False) -> Union[str, tuple[str, float]]:
-        """Parses OCR data assuming it represents a single phrase (e.g., one ingredient name)."""
+    def _filter_words_by_confidence(self, ocr_data: dict, min_confidence: int) -> list[dict]:
+        """Filters words from OCR data based on a minimum confidence score and returns structured data."""
         if not ocr_data or not ocr_data.get('text'):
-            return ("", 0.0) if return_confidence else ""
+            return []
 
-        words, confidences = [], []
+        filtered_words = []
         for i in range(len(ocr_data['text'])):
             confidence = int(ocr_data['conf'][i])
             text = ocr_data['text'][i].strip()
             if text and confidence >= min_confidence:
-                words.append(text)
-                confidences.append(confidence)
+                filtered_words.append({
+                    'text': text,
+                    'left': int(ocr_data['left'][i]),
+                    'width': int(ocr_data['width'][i]),
+                    'line_num': int(ocr_data['line_num'][i]),
+                    'block_num': int(ocr_data['block_num'][i]),
+                    'conf': confidence
+                })
+        return filtered_words
+
+    def parse_as_single_phrase(self, ocr_data: dict, min_confidence: int, return_confidence: bool = False) -> Union[str, tuple[str, float]]:
+        """Parses OCR data assuming it represents a single phrase (e.g., one ingredient name)."""
+        filtered_words = self._filter_words_by_confidence(ocr_data, min_confidence)
+        if not filtered_words:
+            return ("", 0.0) if return_confidence else ""
+
+        words = [word['text'] for word in filtered_words]
+        confidences = [word['conf'] for word in filtered_words]
 
         result = " ".join(words)
         log.debug(f"Parsed single phrase with min confidence {min_confidence}: '{result}'")
@@ -64,22 +81,10 @@ class TextParser:
 
     def parse_as_ingredient_list(self, ocr_data: dict, min_confidence: int, return_confidence: bool = False) -> Union[list[str], list[tuple[str, float]]]:
         """Parses structured OCR data, intelligently grouping words into distinct ingredients."""
-        if not ocr_data or not ocr_data.get('text'):
-            return []
+        words = self._filter_words_by_confidence(ocr_data, min_confidence)
+        if not words: return []
 
         horizontal_gap_threshold = self.config_manager.get_setting("bot_settings.panel_detection.horizontal_gap_threshold", default=30)
-
-        words = []
-        for i in range(len(ocr_data['text'])):
-            confidence = int(ocr_data['conf'][i])
-            text = ocr_data['text'][i].strip()
-            if confidence >= min_confidence and text:
-                words.append({
-                    'text': text, 'left': int(ocr_data['left'][i]), 'width': int(ocr_data['width'][i]),
-                    'line_num': int(ocr_data['line_num'][i]), 'block_num': int(ocr_data['block_num'][i]), 'conf': confidence
-                })
-
-        if not words: return []
 
         words.sort(key=lambda w: (w['block_num'], w['line_num'], w['left']))
 
@@ -109,4 +114,3 @@ class TextParser:
             results.append((phrase, avg_conf))
         else:
             results.append(phrase)
-

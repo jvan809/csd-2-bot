@@ -22,7 +22,7 @@ This plan outlines the implementation steps for creating the Minimum Viable Prod
 - **REQ-008**: The bot must execute ingredient key presses in the order specified by the recipe, not the order they appear on the screen.
 - **REQ-007**: The project shall include a `README.md` file with clear setup and usage instructions.
 - **CON-001**: The game does not provide a public API for programmatic interaction.
-- **CON-002**: OCR must be resilient to different game window sizes.
+- **CON-002**: For the MVP, the bot will assume a fixed, full-screen resolution. Resilience to different window sizes is deferred.
 - **CON-003**: The bot should perform screen capture one time per page of ingredients.
 - **CON-004**: OCR must handle text on varied backgrounds (black text on white, white text on a fixed knife background).
 - **GUD-001**: Implement a 'setup' phase to identify and store bounding box coordinates for OCR regions.
@@ -78,16 +78,18 @@ This plan outlines the implementation steps for creating the Minimum Viable Prod
 
 ### Implementation Phase 4: Calibration & Setup
 
-- GOAL-004: Develop a one-time setup script to dynamically find game UI elements and calculate OCR regions, saving them to the configuration file.
+- GOAL-004: Develop a one-time setup script to pre-calculate the static positions of all UI elements, including individual ingredient slots, and generate a mask to handle rounded corners, optimizing the main loop.
 
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
-| TASK-022 | Create a `setup.py` script in the root directory. The script should instruct the user to have the game open and visible. | | |
-| TASK-023 | In `setup.py`, implement logic using `cv2.matchTemplate` to locate reference UI elements on screen from images in `/assets/templates`. |X| |
-| TASK-024 | In `setup.py`, implement logic to calculate the absolute coordinates for all gameplay ROIs (e.g., required ingredients list, available ingredients panel) based on the found reference elements. | | |
-| TASK-025 | In `setup.py`, use the `config_manager` to write the calculated ROI coordinates into `config.json`. | | |
-| TASK-026 | Create `tests/test_setup.py` to unit test the calibration logic. | | |
-| TASK-027 | In `test_setup.py`, write tests to verify template matching on fixture images and confirm correct `config.json` updates. | | |
+| TASK-022 | Create a `setup.py` script. The script should instruct the user to have the game open (full-screen) and visible. | X | 2025-08-02 |
+| TASK-023 | In `setup.py`, set up code to allow the user to determine `ingredient_panel_roi` and `recipe_list_roi`. | X | 2025-08-02 |
+| TASK-024 | In `setup.py`, instruct the user to display a screen with at least 5 ingredients. Run contour detection within the `ingredient_panel_roi` to find the 5+ individual ingredient boxes, and extrapolate up to 8 total | X | 2025-08-02 |
+| TASK-025 | For each of the 8 ingredient boxes, calculate its relative ROI (relative to the `ingredient_panel_roi`). From one contour, generate a corner mask image using `cv2.convexHull` and save it to `/assets/masks/ingredient_mask.png`. | X | 2025-08-02 |
+| TASK-026 | In `setup.py`, use the `config_manager` to write all calculated ROIs (main panels, a list of 8 individual relative slot ROIs) and the mask path into `config.json`. | X | 2025-08-02 |
+| TASK-027 | Refactor `OcrProcessor.process_ingredient_panel_roi` to accept the main `ingredient_panel_roi` and the list of `relative_ingredient_slot_rois`. | X | 2025-08-02 |
+| TASK-028 | In the refactored `process_ingredient_panel_roi`, perform a **single screen capture** of the `ingredient_panel_roi`. Then, loop through each `relative_slot_roi` to **slice** the captured image into individual slot images. For each slice, check for an active ingredient, apply the pre-loaded corner mask, and run the OCR pipeline. | X | 2025-08-02 |
+| TASK-029 | In `CSD2Bot` (`main.py`), update the `_process_recipe` method to load the `ingredient_panel_roi` and `relative_ingredient_slot_rois` from the config and pass them to the updated `ocr.process_ingredient_panel_roi` method. | X | 2025-08-02 |
 
 ## 3. Alternatives
 
