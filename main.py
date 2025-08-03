@@ -4,7 +4,7 @@ from src.logger_setup import setup_logger
 from src.config_manager import ConfigManager
 from src.input_handler import press_key
 from src.ocr_processor import OcrProcessor
-from src.bot_logic import map_ingredients_to_keys
+from src.bot_logic import map_ingredients_to_keys, fuzzy_map_ingredients_to_keys
 import logging
 
 class CSD2Bot:
@@ -21,6 +21,11 @@ class CSD2Bot:
         self.confirm_key = self.config_manager.get_setting("controls.confirm_key")
         self.loop_delay = self.config_manager.get_setting("bot_settings.main_loop_delay", default=1.0)
         self.ingredient_slots = self.config_manager.get_setting("ocr_regions.ingredient_slot_rois")
+        self.fuzzy_matching_config = {
+            "enabled": self.config_manager.get_setting("bot_settings.fuzzy_matching_enabled", default=False),
+            "multi_step_char_threshold": self.config_manager.get_setting("bot_settings.multi_step_char_threshold", default=20),
+            "fuzzy_match_threshold": self.config_manager.get_setting("bot_settings.fuzzy_match_threshold", default=0.6)
+        }
 
         trigger_config = self.config_manager.get_setting("bot_settings.recipe_trigger")
         self.trigger_x = trigger_config.get("check_pixel_x")
@@ -60,7 +65,11 @@ class CSD2Bot:
             available_on_page = self.ocr.process_ingredient_panel_roi(self.panel_roi, self.ingredient_slots)
             self.log.info(f"Available on page: {available_on_page}")
 
-            keys_to_press, matched_ingredients = map_ingredients_to_keys(remaining_steps, available_on_page, self.input_keys)
+            if self.fuzzy_matching_config["enabled"]:
+                keys_to_press, matched_ingredients = fuzzy_map_ingredients_to_keys(remaining_steps, available_on_page, self.input_keys, self.fuzzy_matching_config)
+            else:
+                keys_to_press, matched_ingredients = map_ingredients_to_keys(remaining_steps, available_on_page, self.input_keys)
+
             self.log.info(f"Matched ingredients: {matched_ingredients}. Keys to press: {keys_to_press}")
 
             if keys_to_press:
