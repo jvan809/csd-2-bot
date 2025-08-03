@@ -21,6 +21,12 @@ class ConfigManager:
                 "ingredient_panel_roi": {"top": 0, "left": 0, "width": 0, "height": 0},
                 "ingredient_slot_rois" : None
             },
+            "recipe_layout": {
+                "page_indicators": None,
+                "inactive_page_color": None,
+                "recipe_slot_rois": None,
+                "vertical_coords": None
+            },
             "bot_settings": {
                 "tesseract_path": "C:/Program Files/Tesseract-OCR/tesseract.exe",
                 "ingredient_mask_path": "",
@@ -43,7 +49,10 @@ class ConfigManager:
                 "logging_level": "INFO",
                 "main_loop_delay": 1.0,
                 "key_delay": 0.05,
-                "page_delay": 0.25
+                "page_delay": 0.25,
+                "fuzzy_matching_enabled": True,
+                "multi_step_char_threshold": 20,
+                "fuzzy_match_threshold": 0.6
             },
             
             "controls": {

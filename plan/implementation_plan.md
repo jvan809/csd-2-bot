@@ -91,6 +91,26 @@ This plan outlines the implementation steps for creating the Minimum Viable Prod
 | TASK-028 | In the refactored `process_ingredient_panel_roi`, perform a **single screen capture** of the `ingredient_panel_roi`. Then, loop through each `relative_slot_roi` to **slice** the captured image into individual slot images. For each slice, check for an active ingredient, apply the pre-loaded corner mask, and run the OCR pipeline. | X | 2025-08-02 |
 | TASK-029 | In `CSD2Bot` (`main.py`), update the `_process_recipe` method to load the `ingredient_panel_roi` and `relative_ingredient_slot_rois` from the config and pass them to the updated `ocr.process_ingredient_panel_roi` method. | X | 2025-08-02 |
 
+### Implementation Phase 5: Page-Aware Recipe Processing
+
+- GOAL-005: Enhance the bot to understand which recipe steps belong to which ingredient page, and update the core logic to process recipes page-by-page, preventing incorrect early matches.
+
+| Task | Description | Completed | Date |
+|------|-------------|-----------|------|
+| TASK-030 | In `setup.py`, add a new interactive step to have the user define the pixel positions for the 2nd and 3rd page indicator boxes next to the recipe list by clicking them (using similar logic to the panel corners). | | |
+| TASK-031 | In `setup.py`, add a step to have the user navigate to a 2-page recipe to capture the color of the *inactive* 3rd page indicator. | | |
+| TASK-032 | In `setup.py`, add a step to have the user navigate to a recipe with at least 6 "normal" steps to programmatically find the 10 recipe slot ROIs and key vertical coordinates (top/bottom of rows, top/bottom of panel). | | |
+| TASK-033 | In `setup.py`, save all new ROIs (page indicators, recipe slots), vertical coordinates, and the inactive color into `config.json` under a new `recipe_layout` object. | | |
+| TASK-034 | Refactor `OcrProcessor.process_recipe_list_roi` to implement the new page-aware logic. It must now return a `list[list[str]]` of size 4, representing steps for page 1, 2, 3, and other steps. Note: 'other steps' mean any steps that do not follow the typical format, and are to be reutrned from this function as a single string to be processed by the bot logic.| | |
+| TASK-035 | In the refactored `process_recipe_list_roi`, create helper functions: `_get_active_pages` (checks indicator colors), `_ocr_recipe_slots` (uses the 10 slot ROIs to get normal steps, if any step fails ocr the failing image should be saved and a warning should be displayed using log.warning()), and `_ocr_extra_region` (uses vertical coordinates to find instructions extra to the normal grid ). | | |
+| TASK-036 | Refactor `CSD2Bot._process_recipe` in `main.py` to remove the flat `remaining_steps` logic. The new logic will process the recipe page by page. | | |
+| TASK-037 | In the new `_process_recipe`, iterate from page 1 to 3. For each page: <br> a. Get the steps for the current page from the OCR data structure. <br> b. If steps exist, call the mapping function and press keys. <br> c. Check if the *next* page is active using a pixel check. If so, press the page turn key. | | |
+| TASK-038 | In `_process_recipe`, after handling pages 1-3, process the extra instructions from the OCR data structure. | | |
+| TASK-039 | Update `fuzzy_map_ingredients_to_keys` to no longer need to track `original_step`. It will receive a simple list of steps for the current page and should return keys and the text of the ingredients it matched. The main loop no longer needs to remove steps. | | |
+
+
+
+
 ## 3. Alternatives
 
 - **ALT-001**: Hard-coding screen coordinates: This was rejected because it is not resilient to changes in game window size or resolution, violating `CON-002`. The dynamic setup phase is more robust.
@@ -136,7 +156,6 @@ This plan outlines the implementation steps for creating the Minimum Viable Prod
 - **RISK-004**: The manual setup process (installing Python, Tesseract, and packages) may be too complex for non-technical users, hindering adoption.
 - **ASSUMPTION-001**: The performance of the capture -> process -> input pipeline in Python will be fast enough to meet the game's real-time demands.
 - **ASSUMPTION-002**: The geometric relationship between reference UI elements and the OCR regions is constant across all supported resolutions.
-- **ASSUMPTION-003**: For the MVP, OCR text for required and available ingredients will match perfectly. Fuzzy matching is not required.
 
 ## 8. Related Specifications / Further Reading
 

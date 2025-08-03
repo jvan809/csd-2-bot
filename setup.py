@@ -1,38 +1,68 @@
-import time
-from pathlib import Path
-
 import cv2
 import numpy as np
 import pyautogui
 from mss import mss
+import pytesseract
+from pytesseract import Output
+from pathlib import Path
 
 from src.config_manager import ConfigManager
-
+from src.ocr_processor import OcrProcessor
 # Global variable to store points from user clicks
 click_points = []
+
 
 def mouse_callback(event, x, y, flags, param):
     """OpenCV mouse callback function to capture click coordinates."""
     global click_points
     clone = param['image']
     window_name = param['window_name']
+    max_points = param.get('max_points', 2)  # Default to 2 for rectangle selection
     
     if event == cv2.EVENT_LBUTTONDOWN:
-        if len(click_points) < 2:
+        if len(click_points) < max_points:
             click_points.append((x, y))
             # Draw a circle to give user feedback on their click
             cv2.circle(clone, (x, y), 5, (0, 255, 0), -1)
             cv2.imshow(window_name, clone)
 
-def get_panel_from_user(screenshot, name = "Ingredient"):
+
+def get_user_clicks(screenshot, prompt_text, num_points=1):
+    """
+    Interactively asks the user to click on specific points on the screen.
+    Returns a list of (x, y) tuples.
+    """
+    global click_points
+    window_name = "Setup: Define Points"
+    
+    click_points = []  # Reset points
+    clone = screenshot.copy()
+    cv2.namedWindow(window_name)
+    cv2.setMouseCallback(window_name, mouse_callback, {'image': clone, 'window_name': window_name, 'max_points': num_points})
+    
+    cv2.putText(clone, prompt_text, (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 0), 3)
+    cv2.putText(clone, prompt_text, (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+    
+    while len(click_points) < num_points:
+        cv2.imshow(window_name, clone)
+        if cv2.waitKey(1) & 0xFF == 27: # Allow escape to exit
+            cv2.destroyAllWindows()
+            return None
+            
+    cv2.destroyAllWindows()
+    print(f"✅ Points captured: {click_points}")
+    return click_points
+
+
+def get_panel_from_user(screenshot, name="Ingredient"):
     """
     Interactively asks the user to define the a panel by clicking.
     """
     global click_points
     window_name = f"Setup: Define {name} Panel"
     
-    while True: # Main loop for retries
-        click_points = [] # Reset points for each attempt
+    while True:  # Main loop for retries
+        click_points = []  # Reset points for each attempt
         clone = screenshot.copy()
         cv2.namedWindow(window_name)
         cv2.setMouseCallback(window_name, mouse_callback, {'image': clone, 'window_name': window_name})
@@ -42,7 +72,7 @@ def get_panel_from_user(screenshot, name = "Ingredient"):
         
         while len(click_points) < 2:
             cv2.imshow(window_name, clone)
-            if cv2.waitKey(1) & 0xFF == 27: # Allow escape to exit
+            if cv2.waitKey(1) & 0xFF == 27:  # Allow escape to exit
                 cv2.destroyAllWindows()
                 return None
 
@@ -67,10 +97,11 @@ def get_panel_from_user(screenshot, name = "Ingredient"):
         else:
             print("⚠️ Invalid input. Please press 'y' or 'n'. Retrying...")
 
-def find_main_panels(screen_width, screen_height):
-    """
-    Captures the full screen and finds the main UI panels using user input.
-    """
+
+def step_1_find_main_panels(config_manager):
+    """STEP 1: Captures the full screen and finds the main UI panels using user input."""
+    print("\n--- Step 1: Main Panel Calibration ---")
+    screen_width, screen_height = pyautogui.size()
     print("🔍 Searching for main game panels...")
     with mss() as sct:
         monitor = {"top": 0, "left": 0, "width": screen_width, "height": screen_height}
@@ -78,12 +109,10 @@ def find_main_panels(screen_width, screen_height):
         screenshot_bgr = cv2.cvtColor(screenshot, cv2.COLOR_BGRA2BGR)
         gray = cv2.cvtColor(screenshot_bgr, cv2.COLOR_BGR2GRAY)
 
-
     ingredient_panel_roi = get_panel_from_user(screenshot, "Ingredient")
-
     recipe_list_roi = get_panel_from_user(screenshot, "Recipe")
 
-    # Optional: Display what was found for user confirmation
+    # Display what was found for user confirmation
     debug_img = screenshot_bgr.copy()
     r1 = ingredient_panel_roi
     cv2.rectangle(debug_img, (r1['left'], r1['top']), (r1['left'] + r1['width'], r1['top'] + r1['height']), (0, 255, 0), 3)
@@ -95,16 +124,115 @@ def find_main_panels(screen_width, screen_height):
     cv2.waitKey(0)
     cv2.destroyAllWindows()
 
-    return ingredient_panel_roi, recipe_list_roi
+    config_manager.update_setting("ocr_regions.ingredient_panel_roi", ingredient_panel_roi)
+    config_manager.update_setting("ocr_regions.recipe_list_roi", recipe_list_roi)
+    return screenshot
+
+
+def step_2_calibrate_recipe_layout(config_manager, screenshot):
+    """STEP 2: Calibrates page indicators and recipe slot positions."""
+    print("\n--- Step 2: Recipe Layout Calibration ---")
+    
+    # --- Get Page Indicator Positions ---
+    print("Navigate to a food with only 2 pages (so the third page is inactive, e.g. Sashimi)")
+    print("\n Please click on the center of the 2nd page indicator, then the 3rd.")
+    input("Press Enter when ready to select page indicators...")
+    indicator_points = get_user_clicks(screenshot, "Click 2nd page dot, then 3rd page dot", num_points=2)
+    if not indicator_points or len(indicator_points) != 2:
+        print("❌ Failed to get page indicator points. Aborting.")
+        return False
+    
+    page_indicators = [
+        {"x": p[0], "y": p[1]} for p in indicator_points
+    ]
+
+    bgr_color = screenshot[indicator_points[1][1], indicator_points[1][0]]
+    inactive_page_color = [int(c) for c in bgr_color[:3]] # Get BGR, ignore Alpha
+    print(f"✅ Inactive page color captured: {inactive_page_color}")
+
+    # --- Programmatically find recipe slots ---
+    print("\n In the game, navigate to a recipe with at least 6 normal steps (e.g. Sashimi).")
+    input("Press Enter when ready to find recipe slots...")
+
+    recipe_roi = config_manager.get_setting("ocr_regions.recipe_list_roi")
+    with mss() as sct:
+        # Grab a fresh screenshot of the recipe panel
+        recipe_panel_img = np.array(sct.grab(recipe_roi))
+
+    # Convert from 4-channel BGRA to 3-channel BGR for color matching
+    recipe_panel_img_hsv = cv2.cvtColor(recipe_panel_img, cv2.COLOR_BGR2HSV)
+
+
+    # recipe boxes are coloured boxes on greyscale background
+    minimum_saturation_ratio = 0.2
+    recipe_panel_height, recipe_panel_width, _ = recipe_panel_img_hsv.shape
+    mask = np.zeros((recipe_panel_height, recipe_panel_width), dtype=np.uint8)
+
+    lower_bound = np.array([0.0, minimum_saturation_ratio*255, 0.0])
+    upper_bound = np.array([255.0, 255.0, 255.0])
+    mask = cv2.inRange(recipe_panel_img_hsv, lower_bound, upper_bound)
+
+
+    # Find contours on the mask and filter them
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    recipe_slots_relative = []
+    min_area = 500  # Heuristic to filter out small noise
+    for contour in contours:
+        if cv2.contourArea(contour) > min_area:
+            recipe_slots_relative.append(cv2.boundingRect(contour))
+
+    recipe_slots_relative = list(set(recipe_slots_relative))
+    
+        # Sort boxes in reading order
+    recipe_slots_relative.sort(key=lambda r: (r[1], r[0])) 
+
+
+    if len(recipe_slots_relative) < 6:
+        print(f"❌ ERROR: Expected to find at least 6 recipe slots, but only found {len(recipe_slots_relative)}.")
+        return False
+    else:
+        print(f"✅ Found {len(recipe_slots_relative)} recipe slots.")
+
+    
+    y_second_line = recipe_slots_relative[-1][1]
+    reciple_slot_width = recipe_slots_relative[-1][2]
+    reciple_slot_height = recipe_slots_relative[-1][3]
+
+    while len(recipe_slots_relative) < 10:
+        x_ind_new_slot = len(recipe_slots_relative) - 5
+        new_slot = (recipe_slots_relative[x_ind_new_slot][0], y_second_line, reciple_slot_width, reciple_slot_height)
+        recipe_slots_relative.append(new_slot)
+
+
+
+    # Convert to the required ROI format
+    recipe_slot_rois = [{"left": x, "top": y, "width": w, "height": h} for x, y, w, h in recipe_slots_relative]
+
+    # Calculate vertical coordinates based on the found slots
+    vertical_coords = {
+        "panel_top": recipe_slots_relative[0][1],
+        "line_one_bottom": recipe_slots_relative[0][1] + recipe_slots_relative[0][3],
+        "line_two_bottom": recipe_slots_relative[5][1] + recipe_slots_relative[5][3],
+        "panel_bottom": recipe_panel_height
+    }
+    print(f"✅ Calculated vertical coordinates: {vertical_coords}")
+    # --- Save to config ---
+    print("\n Saving new recipe layout configuration...")
+    config_manager.update_setting("recipe_layout.page_indicators", page_indicators)
+    config_manager.update_setting("recipe_layout.inactive_page_color", inactive_page_color)
+    config_manager.update_setting("recipe_layout.recipe_slot_rois", recipe_slot_rois)
+    config_manager.update_setting("recipe_layout.vertical_coords", vertical_coords)
+    
+    return True
 
 
 def find_ingredient_slots(panel_roi):
     """
     Finds the 8 individual ingredient slots within the main ingredient panel.
     """
-    print("\n--- Next Step: Ingredient Slot Detection ---")
-    print("Please ensure the game is showing a food with at least 5 ingredient slots visible.")
-    input("Press Enter when you are ready...")
+    print("\n--- Next Step: Ingredient Slot Detection ---") 
+    # initial setup screen should be valid for this function, so no input() is needed
+
 
     with mss() as sct:
         panel_screenshot = np.array(sct.grab(panel_roi))
@@ -198,75 +326,66 @@ def create_corner_mask(first_slot_contour, mask_path):
     cv2.imwrite(str(mask_path), mask)
     print(f"✅ Corner mask created and saved to '{mask_path}'")
 
+def step_3_process_ingredient_slots(config_manager):
+    ingredient_panel_roi = config_manager.get_setting("ocr_regions.ingredient_panel_roi", None)
 
-def main():
-    """Main setup script execution."""
-    print("--- CSD2 Bot Setup Script ---")
-    print("This script will calibrate the bot by finding key areas on your screen.")
-    print("Please make sure the game is running in full-screen mode.")
-    print("Navigate to any save file, Food Catalog then Soup on the top row, and start making stew")
-    input("Press Enter to begin...")
-
-
-
-    try:
-        screen_width, screen_height = pyautogui.size()
-        print(f"Detected screen resolution: {screen_width}x{screen_height}")
-    except Exception as e:
-        print(f"Could not get screen size. Error: {e}")
-        return
-
-
-    config_manager = ConfigManager()
-    # config_manager.get_setting("ocr_regions.ingredient_panel_roi", None)
-    # config_manager.get_setting("ocr_regions.recipe_list_roi", None)
-
-    # ingredient_panel_roi, recipe_list_roi = find_main_panels(screen_width, screen_height)
-
-
-    # if not ingredient_panel_roi or not recipe_list_roi:
-    #     print("\nSetup failed. Exiting.")
-    #     return
-
-    recipe_list_roi = {
-            "top": 884,
-            "left": 452,
-            "width": 1012,
-            "height": 97
-        }
-    ingredient_panel_roi = {
-            "top": 146,
-            "left": 1610,
-            "width": 305,
-            "height": 364
-        }
-
+    if not ingredient_panel_roi:
+        print("Ingredient panel failed to save to config. Exiting")
+        return False
 
     slots, first_slot_contour = find_ingredient_slots(ingredient_panel_roi)
     if not slots:
-        print("\nSetup failed. Exiting.")
-        return
+        return False
 
     ingredient_slot_rois = []
     # panel_x, panel_y = ingredient_panel_roi['left'], ingredient_panel_roi['top']
     for rect in slots:
         x, y, w, h = rect
-        absolute_roi = {"top": y, "left": x, "width": w, "height": h}
-        ingredient_slot_rois.append(absolute_roi)
+        relative_roi = {"top": y, "left": x, "width": w, "height": h}
+        ingredient_slot_rois.append(relative_roi)
 
     mask_path = Path("assets/masks/ingredient_mask.png")
     create_corner_mask(first_slot_contour, mask_path)
 
     print("\n💾 Saving configuration...")
-
-    config_manager.update_setting("ocr_regions.ingredient_panel_roi", ingredient_panel_roi)
-    config_manager.update_setting("ocr_regions.recipe_list_roi", recipe_list_roi)
     config_manager.update_setting("ocr_regions.ingredient_slot_rois", ingredient_slot_rois)
     config_manager.update_setting("bot_settings.ingredient_mask_path", str(mask_path))
+    return True    
 
-    config_manager.save_config()
+
+def main():
+    """Main setup script execution."""
+    print("--- CSD2 Bot Setup Script ---")
+    print("This script will calibrate the bot by finding key areas on your screen.")
+    print("Please make sure the game is running and visible.")
+    input("Press Enter to begin...")
+
+    config_manager = ConfigManager()
+
+    # --- Run Setup Steps ---
+    # The first step also captures the initial screenshot we need for subsequent steps.
+    screenshot = step_1_find_main_panels(config_manager)
+    if screenshot is None:
+        print("\n❌ Setup failed during main panel detection. Exiting.")
+        return
+
+    success = step_2_calibrate_recipe_layout(config_manager, screenshot)
+    if not success:
+        print("\n❌ Setup failed during recipe layout calibration. Exiting.")
+        return
+
+    success = step_3_process_ingredient_slots(config_manager)
+    if not success:
+        print("\n❌ Setup failed during recipe layout calibration. Exiting.")
+        return
+
+
+
+    # The config is saved by `update_setting` within each step, so we just need a final message.
+    print("\n" + "="*40)
     print("✅ Configuration saved successfully to config.json.")
-    print("\nSetup complete! You can now run the main bot.")
+    print("Setup complete! You can now run the main bot.")
+    print("="*40)
 
 
 if __name__ == "__main__":

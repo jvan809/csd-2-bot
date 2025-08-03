@@ -1,67 +1,152 @@
 {
     "ocr_regions": {
         "recipe_list_roi": {
-            "top": 884,
-            "left": 452,
-            "width": 1012,
-            "height": 97
+            "top": 878,
+            "left": 453,
+            "width": 1014,
+            "height": 110
         },
         "ingredient_panel_roi": {
-            "top": 146,
-            "left": 1610,
-            "width": 305,
-            "height": 364
+            "top": 144,
+            "left": 1609,
+            "width": 308,
+            "height": 365
         },
         "ingredient_slot_rois": [
             {
-                "top": 61,
-                "left": 3,
+                "top": 63,
+                "left": 4,
                 "width": 147,
                 "height": 27
             },
             {
-                "top": 151,
-                "left": 3,
+                "top": 153,
+                "left": 4,
                 "width": 147,
                 "height": 27
             },
             {
-                "top": 241,
-                "left": 3,
+                "top": 243,
+                "left": 4,
                 "width": 147,
                 "height": 27
             },
             {
-                "top": 331,
-                "left": 3,
+                "top": 333,
+                "left": 4,
                 "width": 147,
                 "height": 27
             },
             {
-                "top": 61,
-                "left": 157,
+                "top": 63,
+                "left": 158,
                 "width": 147,
                 "height": 27
             },
             {
-                "top": 151,
-                "left": 157,
+                "top": 153,
+                "left": 158,
                 "width": 147,
                 "height": 27
             },
             {
-                "top": 241,
-                "left": 157,
+                "top": 243,
+                "left": 158,
                 "width": 147,
                 "height": 27
             },
             {
-                "top": 331,
-                "left": 157,
+                "top": 333,
+                "left": 158,
                 "width": 147,
                 "height": 27
             }
         ]
+    },
+    "recipe_layout": {
+        "page_indicators": [
+            {
+                "x": 1730,
+                "y": 530
+            },
+            {
+                "x": 1747,
+                "y": 530
+            }
+        ],
+        "inactive_page_color": [
+            45,
+            45,
+            45
+        ],
+        "recipe_slot_rois": [
+            {
+                "left": 3,
+                "top": 6,
+                "width": 19,
+                "height": 32
+            },
+            {
+                "left": 198,
+                "top": 6,
+                "width": 19,
+                "height": 32
+            },
+            {
+                "left": 393,
+                "top": 6,
+                "width": 19,
+                "height": 32
+            },
+            {
+                "left": 588,
+                "top": 6,
+                "width": 19,
+                "height": 32
+            },
+            {
+                "left": 783,
+                "top": 6,
+                "width": 19,
+                "height": 32
+            },
+            {
+                "left": 3,
+                "top": 40,
+                "width": 19,
+                "height": 32
+            },
+            {
+                "left": 198,
+                "top": 40,
+                "width": 19,
+                "height": 32
+            },
+            {
+                "left": 393,
+                "top": 40,
+                "width": 19,
+                "height": 32
+            },
+            {
+                "left": 588,
+                "top": 40,
+                "width": 19,
+                "height": 32
+            },
+            {
+                "left": 783,
+                "top": 40,
+                "width": 19,
+                "height": 32
+            }
+        ],
+        "vertical_coords": {
+            "panel_top": 6,
+            "line_one_bottom": 38,
+            "line_two_bottom": 72,
+            "panel_bottom": 110
+        }
     },
     "bot_settings": {
         "tesseract_path": "C:/Program Files/Tesseract-OCR/tesseract.exe",
@@ -89,7 +174,10 @@
         "logging_level": "INFO",
         "main_loop_delay": 0.1,
         "key_delay": 0.05,
-        "page_delay": 0.05
+        "page_delay": 0.05,
+        "fuzzy_matching_enabled": true,
+        "multi_step_char_threshold": 20,
+        "fuzzy_match_threshold": 0.6
     },
     "controls": {
         "input_keys": [
