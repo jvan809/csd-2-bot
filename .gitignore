@@ -2,5 +2,7 @@
 bot_activity.log
 /src/__pycache__
 /tests/__pycache__
-*.log
 *.pyc
+/tests/fixtures
+bot_activity.log
+/debug

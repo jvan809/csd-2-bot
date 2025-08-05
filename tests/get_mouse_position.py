@@ -28,7 +28,8 @@ try:
         print('\b' * len(output_line), end='', flush=True)
 
         # A small delay to prevent high CPU usage.
-        time.sleep(1.0)
+        time.sleep(1.0) 
+        
 
 except KeyboardInterrupt:
     

@@ -23,7 +23,6 @@ class ConfigManager:
             },
             "recipe_layout": {
                 "page_indicators": None,
-                "inactive_page_color": None,
                 "recipe_slot_rois": None,
                 "vertical_coords": None
             },

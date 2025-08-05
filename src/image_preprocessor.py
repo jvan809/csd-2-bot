@@ -14,7 +14,6 @@ class ImagePreprocessor:
         """
         target_h = 50
         h, w = image.shape[:2]
-        if h == 0: return image # Avoid division by zero
         scale_ratio = target_h / h
         target_w = int(w * scale_ratio)
         resized_image = cv2.resize(image, (target_w, target_h), interpolation=cv2.INTER_CUBIC)

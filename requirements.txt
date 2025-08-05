@@ -7,3 +7,4 @@ pydirectinput
 
 # -- Testing --
 pytest
+pynput

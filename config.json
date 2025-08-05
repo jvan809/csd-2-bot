@@ -1,63 +1,63 @@
 {
     "ocr_regions": {
         "recipe_list_roi": {
-            "top": 878,
-            "left": 453,
-            "width": 1014,
-            "height": 110
+            "top": 880,
+            "left": 451,
+            "width": 1019,
+            "height": 112
         },
         "ingredient_panel_roi": {
-            "top": 144,
-            "left": 1609,
-            "width": 308,
-            "height": 365
+            "top": 147,
+            "left": 1610,
+            "width": 305,
+            "height": 362
         },
         "ingredient_slot_rois": [
             {
-                "top": 63,
-                "left": 4,
+                "top": 60,
+                "left": 3,
                 "width": 147,
                 "height": 27
             },
             {
-                "top": 153,
-                "left": 4,
+                "top": 150,
+                "left": 3,
                 "width": 147,
                 "height": 27
             },
             {
-                "top": 243,
-                "left": 4,
+                "top": 240,
+                "left": 3,
                 "width": 147,
                 "height": 27
             },
             {
-                "top": 333,
-                "left": 4,
+                "top": 330,
+                "left": 3,
                 "width": 147,
                 "height": 27
             },
             {
-                "top": 63,
-                "left": 158,
+                "top": 60,
+                "left": 157,
                 "width": 147,
                 "height": 27
             },
             {
-                "top": 153,
-                "left": 158,
+                "top": 150,
+                "left": 157,
                 "width": 147,
                 "height": 27
             },
             {
-                "top": 243,
-                "left": 158,
+                "top": 240,
+                "left": 157,
                 "width": 147,
                 "height": 27
             },
             {
-                "top": 333,
-                "left": 158,
+                "top": 330,
+                "left": 157,
                 "width": 147,
                 "height": 27
             }
@@ -70,83 +70,140 @@
                 "y": 530
             },
             {
-                "x": 1747,
+                "x": 1745,
                 "y": 530
             }
         ],
-        "inactive_page_color": [
-            45,
-            45,
-            45
-        ],
         "recipe_slot_rois": [
             {
-                "left": 3,
-                "top": 6,
-                "width": 19,
-                "height": 32
+                "left": 24,
+                "top": 4,
+                "width": 176,
+                "height": 34
             },
             {
-                "left": 198,
-                "top": 6,
-                "width": 19,
-                "height": 32
+                "left": 219,
+                "top": 4,
+                "width": 176,
+                "height": 34
             },
             {
-                "left": 393,
-                "top": 6,
-                "width": 19,
-                "height": 32
+                "left": 414,
+                "top": 4,
+                "width": 176,
+                "height": 34
             },
             {
-                "left": 588,
-                "top": 6,
-                "width": 19,
-                "height": 32
+                "left": 609,
+                "top": 4,
+                "width": 176,
+                "height": 34
             },
             {
-                "left": 783,
-                "top": 6,
-                "width": 19,
-                "height": 32
+                "left": 804,
+                "top": 4,
+                "width": 215,
+                "height": 34
             },
             {
-                "left": 3,
-                "top": 40,
-                "width": 19,
-                "height": 32
+                "left": 24,
+                "top": 38,
+                "width": 176,
+                "height": 34
             },
             {
-                "left": 198,
-                "top": 40,
-                "width": 19,
-                "height": 32
+                "left": 219,
+                "top": 38,
+                "width": 176,
+                "height": 34
             },
             {
-                "left": 393,
-                "top": 40,
-                "width": 19,
-                "height": 32
+                "left": 414,
+                "top": 38,
+                "width": 176,
+                "height": 34
             },
             {
-                "left": 588,
-                "top": 40,
-                "width": 19,
-                "height": 32
+                "left": 609,
+                "top": 38,
+                "width": 176,
+                "height": 34
             },
             {
-                "left": 783,
-                "top": 40,
-                "width": 19,
-                "height": 32
+                "left": 804,
+                "top": 38,
+                "width": 215,
+                "height": 34
             }
         ],
         "vertical_coords": {
-            "panel_top": 6,
-            "line_one_bottom": 38,
-            "line_two_bottom": 72,
-            "panel_bottom": 110
-        }
+            "panel_top": 4,
+            "line_one_bottom": 36,
+            "line_two_bottom": 70,
+            "panel_bottom": 112
+        },
+        "recipe_indicator_rois": [
+            {
+                "left": 5,
+                "top": 4,
+                "width": 19,
+                "height": 32
+            },
+            {
+                "left": 200,
+                "top": 4,
+                "width": 19,
+                "height": 32
+            },
+            {
+                "left": 395,
+                "top": 4,
+                "width": 19,
+                "height": 32
+            },
+            {
+                "left": 590,
+                "top": 4,
+                "width": 19,
+                "height": 32
+            },
+            {
+                "left": 785,
+                "top": 4,
+                "width": 19,
+                "height": 32
+            },
+            {
+                "left": 5,
+                "top": 38,
+                "width": 19,
+                "height": 32
+            },
+            {
+                "left": 200,
+                "top": 38,
+                "width": 19,
+                "height": 32
+            },
+            {
+                "left": 395,
+                "top": 38,
+                "width": 19,
+                "height": 32
+            },
+            {
+                "left": 590,
+                "top": 38,
+                "width": 19,
+                "height": 32
+            },
+            {
+                "left": 785,
+                "top": 38,
+                "width": 19,
+                "height": 32
+            }
+        ]
     },
     "bot_settings": {
         "tesseract_path": "C:/Program Files/Tesseract-OCR/tesseract.exe",
@@ -170,14 +227,14 @@
         },
         "ocr_upscale_factor": 2.0,
         "right_panel_shear_factor": 0.14,
-        "min_confidence": 50,
+        "min_confidence": 40,
         "logging_level": "INFO",
         "main_loop_delay": 0.1,
-        "key_delay": 0.05,
+        "key_delay": 0.5,
         "page_delay": 0.05,
         "fuzzy_matching_enabled": true,
         "multi_step_char_threshold": 20,
-        "fuzzy_match_threshold": 0.6
+        "fuzzy_match_threshold": 0.1
     },
     "controls": {
         "input_keys": [

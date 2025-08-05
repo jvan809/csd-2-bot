@@ -1,7 +1,0 @@
-sausage
-ham
-egg
-bacon
-cheese
-biscuit
-croissant

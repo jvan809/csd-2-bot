@@ -11,6 +11,10 @@ tags: ['feature', 'app', 'automation', 'game', 'python', 'ai', 'mvp']
 
 This plan outlines the implementation steps for creating the Minimum Viable Product (MVP) of the `csd2` bot. The goal is to build a Python-based application for Windows that automates gameplay by reading recipe information from the screen using OCR and emulating the necessary keyboard inputs to complete the recipe.
 
+**Known Foods that don't work** 
+*Extra step handling* Beef wellington, steamed momos
+*timing* creme brulee, beer (both kinds)
+
 ## 1. Requirements & Constraints
 
 - **REQ-001**: The bot shall run on the Windows operating system.
@@ -97,12 +101,11 @@ This plan outlines the implementation steps for creating the Minimum Viable Prod
 
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
-| TASK-030 | In `setup.py`, add a new interactive step to have the user define the pixel positions for the 2nd and 3rd page indicator boxes next to the recipe list by clicking them (using similar logic to the panel corners). | | |
-| TASK-031 | In `setup.py`, add a step to have the user navigate to a 2-page recipe to capture the color of the *inactive* 3rd page indicator. | | |
-| TASK-032 | In `setup.py`, add a step to have the user navigate to a recipe with at least 6 "normal" steps to programmatically find the 10 recipe slot ROIs and key vertical coordinates (top/bottom of rows, top/bottom of panel). | | |
-| TASK-033 | In `setup.py`, save all new ROIs (page indicators, recipe slots), vertical coordinates, and the inactive color into `config.json` under a new `recipe_layout` object. | | |
-| TASK-034 | Refactor `OcrProcessor.process_recipe_list_roi` to implement the new page-aware logic. It must now return a `list[list[str]]` of size 4, representing steps for page 1, 2, 3, and other steps. Note: 'other steps' mean any steps that do not follow the typical format, and are to be reutrned from this function as a single string to be processed by the bot logic.| | |
-| TASK-035 | In the refactored `process_recipe_list_roi`, create helper functions: `_get_active_pages` (checks indicator colors), `_ocr_recipe_slots` (uses the 10 slot ROIs to get normal steps, if any step fails ocr the failing image should be saved and a warning should be displayed using log.warning()), and `_ocr_extra_region` (uses vertical coordinates to find instructions extra to the normal grid ). | | |
+| TASK-030 | In `setup.py`, add a new interactive step to have the user define the pixel positions for the 2nd and 3rd page indicator boxes next to the recipe list by clicking them (using similar logic to the panel corners). | X | 2025-08-03 |
+| TASK-032 | In `setup.py`, add a step to have the user navigate to a recipe with at least 6 "normal" steps to programmatically find the 10 recipe slot ROIs and key vertical coordinates (top/bottom of rows, top/bottom of panel). | X | 2025-08-03 |
+| TASK-033 | In `setup.py`, save all new ROIs (page indicators, recipe slots) and vertical coordinates into `config.json` under a new `recipe_layout` object. | X | 2025-08-03 |
+| TASK-034 | Refactor `OcrProcessor.process_recipe_list_roi` to implement the new page-aware logic. It must now return a `list[list[str]]` of size 4, representing steps for page 1, 2, 3, and other steps. Note: 'other steps' mean any steps that do not follow the typical format, and are to be reutrned from this function as a single string to be processed by the bot logic. | X | 2025-08-04 |
+| TASK-035 | In the refactored `process_recipe_list_roi`, create helper functions: `_get_active_pages` (checks indicator colors), `_ocr_recipe_slots` (uses the 10 slot ROIs to get normal steps, if any step fails ocr the failing image should be saved and a warning should be displayed using log.warning()), and `_ocr_extra_region` (uses vertical coordinates to find instructions extra to the normal grid ). | X | 2025-08-04 |
 | TASK-036 | Refactor `CSD2Bot._process_recipe` in `main.py` to remove the flat `remaining_steps` logic. The new logic will process the recipe page by page. | | |
 | TASK-037 | In the new `_process_recipe`, iterate from page 1 to 3. For each page: <br> a. Get the steps for the current page from the OCR data structure. <br> b. If steps exist, call the mapping function and press keys. <br> c. Check if the *next* page is active using a pixel check. If so, press the page turn key. | | |
 | TASK-038 | In `_process_recipe`, after handling pages 1-3, process the extra instructions from the OCR data structure. | | |

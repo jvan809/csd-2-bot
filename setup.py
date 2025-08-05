@@ -134,9 +134,7 @@ def step_2_calibrate_recipe_layout(config_manager, screenshot):
     print("\n--- Step 2: Recipe Layout Calibration ---")
     
     # --- Get Page Indicator Positions ---
-    print("Navigate to a food with only 2 pages (so the third page is inactive, e.g. Sashimi)")
-    print("\n Please click on the center of the 2nd page indicator, then the 3rd.")
-    input("Press Enter when ready to select page indicators...")
+
     indicator_points = get_user_clicks(screenshot, "Click 2nd page dot, then 3rd page dot", num_points=2)
     if not indicator_points or len(indicator_points) != 2:
         print("❌ Failed to get page indicator points. Aborting.")
@@ -146,9 +144,6 @@ def step_2_calibrate_recipe_layout(config_manager, screenshot):
         {"x": p[0], "y": p[1]} for p in indicator_points
     ]
 
-    bgr_color = screenshot[indicator_points[1][1], indicator_points[1][0]]
-    inactive_page_color = [int(c) for c in bgr_color[:3]] # Get BGR, ignore Alpha
-    print(f"✅ Inactive page color captured: {inactive_page_color}")
 
     # --- Programmatically find recipe slots ---
     print("\n In the game, navigate to a recipe with at least 6 normal steps (e.g. Sashimi).")
@@ -206,7 +201,18 @@ def step_2_calibrate_recipe_layout(config_manager, screenshot):
 
 
     # Convert to the required ROI format
-    recipe_slot_rois = [{"left": x, "top": y, "width": w, "height": h} for x, y, w, h in recipe_slots_relative]
+    recipe_indicator_rois = [{"left": x, "top": y, "width": w, "height": h} for x, y, w, h in recipe_slots_relative]
+    recipe_slot_rois = []
+    for (i, slot) in enumerate(recipe_slots_relative):
+        x, y, w, h = slot
+        if i == 4 or i == 9:
+            slot_right = recipe_panel_width
+        else: 
+            slot_right =  recipe_indicator_rois[i+1]['left']
+
+        recipe_slot = {"left": x+w, "top": y, "width": slot_right - (x+w), "height":h+2}
+        recipe_slot_rois.append(recipe_slot)
+
 
     # Calculate vertical coordinates based on the found slots
     vertical_coords = {
@@ -219,8 +225,8 @@ def step_2_calibrate_recipe_layout(config_manager, screenshot):
     # --- Save to config ---
     print("\n Saving new recipe layout configuration...")
     config_manager.update_setting("recipe_layout.page_indicators", page_indicators)
-    config_manager.update_setting("recipe_layout.inactive_page_color", inactive_page_color)
     config_manager.update_setting("recipe_layout.recipe_slot_rois", recipe_slot_rois)
+    config_manager.update_setting("recipe_layout.recipe_indicator_rois", recipe_indicator_rois)
     config_manager.update_setting("recipe_layout.vertical_coords", vertical_coords)
     
     return True

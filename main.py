@@ -1,11 +1,13 @@
 import pyautogui
 import pydirectinput
+import cv2
+import logging
 from src.logger_setup import setup_logger
 from src.config_manager import ConfigManager
 from src.input_handler import press_key
 from src.ocr_processor import OcrProcessor
-from src.bot_logic import map_ingredients_to_keys, fuzzy_map_ingredients_to_keys
-import logging
+from src.bot_logic import fuzzy_map_ingredients_to_keys
+from src.screen_capture import capture_region
 
 class CSD2Bot:
     def __init__(self, config_manager: ConfigManager, ocr_processor: OcrProcessor):
@@ -20,6 +22,8 @@ class CSD2Bot:
         self.page_turn_key = self.config_manager.get_setting("controls.page_turn_key")
         self.confirm_key = self.config_manager.get_setting("controls.confirm_key")
         self.loop_delay = self.config_manager.get_setting("bot_settings.main_loop_delay", default=1.0)
+        self.page_delay = self.config_manager.get_setting("bot_settings.page_delay", default=0.25)
+        self.page_indicators = self.config_manager.get_setting("recipe_layout.page_indicators")
         self.ingredient_slots = self.config_manager.get_setting("ocr_regions.ingredient_slot_rois")
         self.fuzzy_matching_config = {
             "enabled": self.config_manager.get_setting("bot_settings.fuzzy_matching_enabled", default=False),
@@ -38,65 +42,103 @@ class CSD2Bot:
         self.log.info(f"Waiting for a new recipe...")
         self._wait_for_recipe_trigger()
 
-        self.log.debug(f"Recipe trigger detected at ({self.trigger_x}, {self.trigger_y}). Reading recipe...")
-        remaining_steps = self.ocr.process_recipe_list_roi(self.recipe_roi)
-
-        if not remaining_steps:
-            self.log.warning("Recipe card detected, but failed to read any recipe text. Skipping this attempt.")
-            pyautogui.sleep(self.loop_delay)
-            return
-
-        self.log.info(f"New recipe detected! Steps: {remaining_steps}")
-        self._process_recipe(remaining_steps)
+        self.log.debug(f"Recipe trigger detected. Reading recipe...")
+        self._process_recipe()
 
     def _wait_for_recipe_trigger(self):
         """Waits for the pixel color that indicates a new recipe is available."""
         while not pyautogui.pixelMatchesColor(self.trigger_x, self.trigger_y, self.expected_color, tolerance=self.tolerance):
             pyautogui.sleep(self.loop_delay)
 
-    def _process_recipe(self, remaining_steps: list):
-        """Processes all ingredients for the current recipe, turning pages as needed."""
-        page_turns = 0
-        max_page_turns = 2  # Initial page + 2 turns - feature of game so no config
+    def _is_page_active(self, page_number: int) -> bool:
+        """Checks if an ingredient page indicator is active based on color saturation."""
+        if not self.page_indicators or len(self.page_indicators) < page_number - 1:
+            self.log.error(f"Page indicator for page {page_number} not found in config.")
+            return False
 
-        while remaining_steps and page_turns <= max_page_turns:
-            self.log.debug(f"Processing page {page_turns + 1}. Remaining steps: {remaining_steps}")
+        # page_number is 2 or 3, list is 0-indexed
+        indicator = self.page_indicators[page_number - 2]
+        x, y = indicator['x'], indicator['y']
+        
+        # Capture a small 1x1 region at the indicator's coordinates
+        pixel_roi = {'left': x, 'top': y, 'width': 1, 'height': 1}
+        pixel_img_bgra = capture_region(pixel_roi)
 
-            available_on_page = self.ocr.process_ingredient_panel_roi(self.panel_roi, self.ingredient_slots)
-            self.log.info(f"Available on page: {available_on_page}")
+        if pixel_img_bgra is None:
+            self.log.warning(f"Failed to capture pixel for page {page_number} indicator.")
+            return False
 
-            if self.fuzzy_matching_config["enabled"]:
-                keys_to_press, matched_ingredients = fuzzy_map_ingredients_to_keys(remaining_steps, available_on_page, self.input_keys, self.fuzzy_matching_config)
-            else:
-                keys_to_press, matched_ingredients = map_ingredients_to_keys(remaining_steps, available_on_page, self.input_keys)
+        # Convert BGRA to BGR then to HSV
+        pixel_bgr = cv2.cvtColor(pixel_img_bgra, cv2.COLOR_BGRA2BGR)
+        pixel_hsv = cv2.cvtColor(pixel_bgr, cv2.COLOR_BGR2HSV)
+        
+        # Check the saturation value (index 1)
+        saturation = pixel_hsv[0, 0][1]
+        is_active = saturation >= 10
+        self.log.debug(f"Page {page_number} indicator saturation: {saturation}. Active: {is_active}")
+        return is_active
 
-            self.log.info(f"Matched ingredients: {matched_ingredients}. Keys to press: {keys_to_press}")
+    def _process_page(self, required_steps: list):
+        """Processes a single page of ingredients."""
+        if not required_steps:
+            return
 
-            if keys_to_press:
-                for key in keys_to_press:
-                    press_key(key)
+        self.log.info(f"Processing steps for current page: {required_steps}")
+        available_on_page = self.ocr.process_ingredient_panel_roi(self.panel_roi, self.ingredient_slots)
+        self.log.info(f"Available on page: {available_on_page}")
 
-                # Remove matched ingredients
-                matched_set = set(matched_ingredients)
-                remaining_steps = [step for step in remaining_steps if step not in matched_set]
+        keys_to_press = fuzzy_map_ingredients_to_keys(required_steps, available_on_page, self.input_keys, self.fuzzy_matching_config)
+        
+        self.log.info(f"Keys to press for this page: {keys_to_press}")
+        if keys_to_press:
+            for key in keys_to_press:
+                press_key(key)
 
-            if remaining_steps and page_turns < max_page_turns:
-                self.log.debug("There are remaining steps, turning page.")
-                press_key(self.page_turn_key)
-                page_turns += 1
-            else:
-                break  # No more steps or max pages reached
+    def _process_recipe(self):
+        """Processes a recipe page by page."""
+        recipe_data = self.ocr.process_recipe_list_roi(self.recipe_roi)
+        
+        # Check if OCR returned anything meaningful
+        if not any(recipe_data):
+            self.log.warning("Recipe card detected, but failed to read any recipe text. Skipping this attempt.")
+            pyautogui.sleep(self.loop_delay)
+            return
+        
+        self.log.info(f"New recipe detected! Data: {recipe_data}")
+        
+        current_page = 1
+        for page_index in range(3): # Corresponds to pages 1, 2, 3
+            required_steps = recipe_data[page_index]
+            self._process_page(required_steps)
 
-        self._serve_order(remaining_steps)
+            # Page turning logic
+            if current_page < 3:
+                # Check if there are steps on subsequent pages or extra steps
+                future_steps_exist = any(recipe_data[i] for i in range(page_index + 1, 4))
+                
+                if future_steps_exist and self._is_page_active(current_page + 1):
+                    self.log.info(f"Turning to page {current_page + 1}...")
+                    press_key(self.page_turn_key)
+                    current_page += 1
+                    pyautogui.sleep(self.page_delay)
+                else:
+                    # No more active pages with required steps, stop turning.
+                    self.log.debug("No more active pages with steps found. Finishing recipe.")
+                    break
+        
+        # Process extra steps after handling all normal pages
+        extra_steps = recipe_data[3]
+        if extra_steps:
+            self.log.info("Processing extra steps...")
+            self._process_page(extra_steps)
 
-    def _serve_order(self, remaining_steps: list):
-        """Presses the confirm key if the recipe is complete, otherwise logs a warning."""
-        if not remaining_steps:
-            self.log.info("Recipe complete. Pressing confirm key.")
-            press_key(self.confirm_key)
-        else:
-            self.log.warning(f"Finished recipe attempt with remaining steps: {remaining_steps}. Manual intervention may be needed.")
-            pyautogui.sleep(5)
+        self._serve_order()
+
+    def _serve_order(self):
+        """Presses the confirm key to serve the order."""
+        self.log.info("Recipe complete. Pressing confirm key.")
+        press_key(self.confirm_key)
+        pyautogui.sleep(self.loop_delay) # Add a small delay after serving
 
 def main():      
     """Main application entry point."""

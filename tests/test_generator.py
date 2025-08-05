@@ -180,17 +180,15 @@ class TestGenerator:
             log.error(f"Failed to create test directory {test_run_dir}. Error: {e}")
             return
 
-        steps_processed_count = 0
         for i, (page_ingredients, page_keys) in enumerate(zip(self.ingredient_pages_ocr, self.key_presses_per_page)):
             page_num = i + 1
-
+            is_last_page = page_num == len(self.ingredient_pages_ocr)
             # For the current page, the required steps are the remainder of the full list
-            remaining_recipe = self.full_recipe_steps[steps_processed_count:]
 
             test_case_data = {
                 "description": f"Test case for '{first_step}', page {page_num}",
                 "input": {
-                    "recipe_steps": remaining_recipe,
+                    "recipe_steps": self.full_recipe_steps[i] + (self.full_recipe_steps[3] if is_last_page else []),
                     "available_on_page": page_ingredients
                 },
                 "expected": {"keys_to_press": page_keys}
@@ -203,7 +201,6 @@ class TestGenerator:
             log.info(f"Successfully generated test file: {file_path}")
 
             # Update the count of processed steps for the next iteration
-            steps_processed_count += len(page_keys)
 
 if __name__ == "__main__":
     config_manager = ConfigManager()
