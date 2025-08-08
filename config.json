@@ -215,6 +215,27 @@
             "min_aspect_ratio": 2.0,
             "horizontal_gap_threshold": 30
         },
+        "recipe_parsing": {
+            "page_hue_ranges": {
+                "1": [
+                    125,
+                    135
+                ],
+                "2_lower": [
+                    0,
+                    5
+                ],
+                "2_upper": [
+                    175,
+                    179
+                ],
+                "3": [
+                    15,
+                    25
+                ]
+            },
+            "empty_slot_saturation_threshold": 50
+        },
         "recipe_trigger": {
             "check_pixel_x": 454,
             "check_pixel_y": 973,
@@ -226,11 +247,11 @@
             "tolerance": 10
         },
         "ocr_upscale_factor": 2.0,
-        "right_panel_shear_factor": 0.14,
+        "right_panel_shear_factor": 0.15,
         "min_confidence": 40,
         "logging_level": "INFO",
         "main_loop_delay": 0.1,
-        "key_delay": 0.5,
+        "key_delay": 0.05,
         "page_delay": 0.05,
         "fuzzy_matching_enabled": true,
         "multi_step_char_threshold": 20,

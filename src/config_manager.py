@@ -36,6 +36,15 @@ class ConfigManager:
                     "min_aspect_ratio": 2.0,
                     "horizontal_gap_threshold": 30
                 },
+                "recipe_parsing": {
+                    "page_hue_ranges": {
+                        "1": [125, 135],
+                        "2_lower": [0, 5],
+                        "2_upper": [175, 179],
+                        "3": [15, 25]
+                    },
+                    "empty_slot_saturation_threshold": 50
+                },
                 "recipe_trigger": {
                     "check_pixel_x": 454,
                     "check_pixel_y": 973,

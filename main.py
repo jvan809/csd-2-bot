@@ -4,7 +4,7 @@ import cv2
 import logging
 from src.logger_setup import setup_logger
 from src.config_manager import ConfigManager
-from src.input_handler import press_key
+from src.input_handler import press_key, hold_key
 from src.ocr_processor import OcrProcessor
 from src.bot_logic import fuzzy_map_ingredients_to_keys
 from src.screen_capture import capture_region
@@ -87,12 +87,31 @@ class CSD2Bot:
         available_on_page = self.ocr.process_ingredient_panel_roi(self.panel_roi, self.ingredient_slots)
         self.log.info(f"Available on page: {available_on_page}")
 
+        if 'Sanitize' in available_on_page:
+            self.log.info("Special Case: Chores")
+            keys_to_press = self.input_keys
+            press_key(keys_to_press)
+
+            if "Mash" in available_on_page:
+                self.log.debug("Extra special case: Trash mashing")
+                press_key([self.input_keys[1]] * 10)
+                press_key(self.input_keys[2])
+
+            return True
+
+        if "Pour" in available_on_page[0]:
+            self.log.info("Special Case: Beer")
+            hold_key(self.input_keys[0], 1.0)
+            return True
+
+        
+
         keys_to_press = fuzzy_map_ingredients_to_keys(required_steps, available_on_page, self.input_keys, self.fuzzy_matching_config)
         
         self.log.info(f"Keys to press for this page: {keys_to_press}")
-        if keys_to_press:
-            for key in keys_to_press:
-                press_key(key)
+        press_key(keys_to_press)
+
+        return False
 
     def _process_recipe(self):
         """Processes a recipe page by page."""
@@ -106,10 +125,17 @@ class CSD2Bot:
         
         self.log.info(f"New recipe detected! Data: {recipe_data}")
         
+        if recipe_data[3] and len(recipe_data[3][0]) < 10:
+            self.log.info("Extra step string too short, assuming this is an ocr error")
+            recipe_data[3] = []
+
+
         current_page = 1
         for page_index in range(3): # Corresponds to pages 1, 2, 3
             required_steps = recipe_data[page_index]
-            self._process_page(required_steps)
+            special_case = self._process_page(required_steps)
+            if special_case:
+                break
 
             # Page turning logic
             if current_page < 3:
@@ -127,8 +153,9 @@ class CSD2Bot:
                     break
         
         # Process extra steps after handling all normal pages
+        # TODO refactor to remove extra ingredient panel capture where not needed
         extra_steps = recipe_data[3]
-        if extra_steps:
+        if extra_steps and not special_case:
             self.log.info("Processing extra steps...")
             self._process_page(extra_steps)
 

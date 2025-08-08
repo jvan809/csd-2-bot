@@ -177,7 +177,7 @@ class OcrProcessor:
             min_conf = self.config_manager.get_setting("bot_settings.min_confidence", default=50)
             parsed_list = self.text_parser.parse_as_ingredient_list(ocr_data, min_confidence=min_conf)
             if parsed_list:
-                final_structure[3].append(" ".join(parsed_list))
+                extra_steps.append(" ".join(parsed_list))
 
         log.debug(f"Processed recipe panel. Page 1: {final_structure[0]}, Page 2: {final_structure[1]}, Page 3: {final_structure[2]}, Extra: {final_structure[3]}")
         return final_structure

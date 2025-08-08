@@ -12,8 +12,10 @@ class ImagePreprocessor:
         """
         Normalizes an image for OCR by resizing to a standard height and adding padding.
         """
-        target_h = 50
+        target_h = 60
         h, w = image.shape[:2]
+        if target_h < h:
+            log.warning("Attempting to downsize image?")
         scale_ratio = target_h / h
         target_w = int(w * scale_ratio)
         resized_image = cv2.resize(image, (target_w, target_h), interpolation=cv2.INTER_CUBIC)

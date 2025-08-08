@@ -6,3 +6,4 @@ bot_activity.log
 /tests/fixtures
 bot_activity.log
 /debug
+/src/__pycache__

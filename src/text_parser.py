@@ -30,7 +30,7 @@ class TextParser:
             return {}
         try:
             
-            custom_config = f'--oem 3 --psm {psm} -c tessedit_char_whitelist= 0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
+            custom_config = f"--oem 3 --psm {psm}"
             data = pytesseract.image_to_data(image, config=custom_config, output_type=Output.DICT)
             log.debug(f"Extracted structured text data with {len(data.get('text', []))} potential words.")
             return data
