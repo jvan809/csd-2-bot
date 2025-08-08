@@ -255,7 +255,7 @@
         "page_delay": 0.05,
         "fuzzy_matching_enabled": true,
         "multi_step_char_threshold": 20,
-        "fuzzy_match_threshold": 0.1
+        "fuzzy_match_threshold": 0.5
     },
     "controls": {
         "input_keys": [

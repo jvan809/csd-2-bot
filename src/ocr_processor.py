@@ -194,19 +194,20 @@ class OcrProcessor:
                                            relative to the main panel's ROI.
             return_confidence: Whether to return confidence scores with the text.
         """
+        null_result = ("", 0.0) if return_confidence else ""
         panel_image = capture_region(ingredient_panel_roi)
         if panel_image is None:
             return []
 
         results = []
-        end_of_panel = False
-        for slot_roi in relative_ingredient_slot_rois:
+        end_of_panel = 0
+        for i, slot_roi in enumerate(relative_ingredient_slot_rois):
             y, x, w, h = slot_roi['top'], slot_roi['left'], slot_roi['width'], slot_roi['height']
             item_image = panel_image[y:y+h, x:x+w]
 
             if item_image.size == 0:
                 log.warning(f"Ingredient slot ROI is malformed or has size 0: {slot_roi}")
-                results.append(("", 0.0) if return_confidence else "")
+                results.append(null_result)
                 continue
 
             # Heuristic to detect if an ingredient slot is empty. Empty slots are
@@ -217,13 +218,14 @@ class OcrProcessor:
             is_black = np.all(top_left_pixel[:3] == 0)
             if not is_white and not is_black:
                 log.debug("Skipping empty ingredient slot (detected as non-white/black).")
-                end_of_panel = True
-                results.append(("", 0.0) if return_confidence else "")
+                end_of_panel = i
+                
                 continue
             elif end_of_panel:
                 # Thought it was the end of the panel but we were wrong
                 log.warning("Missed Panel")
-                end_of_panel = False
+                results.extend([null_result]*(i-end_of_panel))
+                end_of_panel = 0
 
             # Where the mask is white, use the pixel from item_image. Where black, use white.
             masked_image = np.where(self.label_mask[:, :, None] == 255, item_image, 255)
@@ -244,7 +246,7 @@ class OcrProcessor:
                 self._save_failed_ocr_image(processed_image)
                 debug_phrase, confidence = self.text_parser.parse_as_single_phrase(ocr_data, min_confidence=0, return_confidence=True)
                 log.warning(f"Best Guess: {debug_phrase} with confidence {confidence}")
-                results.append(("", 0.0) if return_confidence else "")
+                results.append(null_result)
 
         log.debug(f"Processed ingredient panel. Found: {results}")
         return results

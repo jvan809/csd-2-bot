@@ -89,13 +89,19 @@ class CSD2Bot:
 
         if 'Sanitize' in available_on_page:
             self.log.info("Special Case: Chores")
-            keys_to_press = self.input_keys
-            press_key(keys_to_press)
 
             if "Mash" in available_on_page:
                 self.log.debug("Extra special case: Trash mashing")
+                
+                press_key([self.input_keys[0]])
                 press_key([self.input_keys[1]] * 10)
                 press_key(self.input_keys[2])
+                return True
+
+
+            keys_to_press = self.input_keys[:len(available_on_page)]
+            press_key(keys_to_press)
+
 
             return True
 
@@ -113,6 +119,44 @@ class CSD2Bot:
 
         return False
 
+    def _consolidate_recipe_pages(self, recipe_data):
+        """
+        Determines the last active page, consolidates extra steps onto it, and truncates the recipe data.
+        - Assumes any extra steps are on the last active page 
+        """
+
+        # Start by assuming the last required page is the highest possible one (page 3, index 2).
+        final_page_candidate = 3
+
+        has_extra_steps = recipe_data[3] != []
+
+        # Iterate downwards from page 3 to page 2 to find the last *required* page.
+        while final_page_candidate > 1:
+
+            if has_extra_steps:
+                # any extra steps are assumed to be on the last active page
+                page_is_required = self._is_page_active(final_page_candidate)
+            else:
+                # if there aren't any extra steps, the last page we need is the last one with instructions
+                page_is_required = recipe_data[final_page_candidate-1] != []
+
+            if page_is_required:
+                # Since we are iterating downwards, the first required page we find is the last one.
+                break
+            else:
+                # This page isn't needed, so the last required page must be before it.
+                final_page_candidate -= 1
+
+        last_page_index = final_page_candidate - 1
+        # put extra steps on last available page to prevent extra screen grab
+        if recipe_data[3]:
+            recipe_data[last_page_index].extend(recipe_data[3])
+        recipe_data = recipe_data[:final_page_candidate]
+
+        return recipe_data, last_page_index
+
+
+
     def _process_recipe(self):
         """Processes a recipe page by page."""
         recipe_data = self.ocr.process_recipe_list_roi(self.recipe_roi)
@@ -123,41 +167,33 @@ class CSD2Bot:
             pyautogui.sleep(self.loop_delay)
             return
         
-        self.log.info(f"New recipe detected! Data: {recipe_data}")
+        self.log.debug(f"Raw Recipe Data: {recipe_data}")
         
         if recipe_data[3] and len(recipe_data[3][0]) < 10:
             self.log.info("Extra step string too short, assuming this is an ocr error")
             recipe_data[3] = []
 
+        recipe_data, last_page_index = self._consolidate_recipe_pages(recipe_data)
 
-        current_page = 1
-        for page_index in range(3): # Corresponds to pages 1, 2, 3
-            required_steps = recipe_data[page_index]
-            special_case = self._process_page(required_steps)
+        self.log.info(f"New recipe detected! Data: {recipe_data}")
+
+
+        for i, page_steps in enumerate(recipe_data): 
+            special_case = self._process_page(page_steps)
             if special_case:
                 break
 
-            # Page turning logic
-            if current_page < 3:
-                # Check if there are steps on subsequent pages or extra steps
-                future_steps_exist = any(recipe_data[i] for i in range(page_index + 1, 4))
-                
-                if future_steps_exist and self._is_page_active(current_page + 1):
-                    self.log.info(f"Turning to page {current_page + 1}...")
-                    press_key(self.page_turn_key)
-                    current_page += 1
-                    pyautogui.sleep(self.page_delay)
-                else:
-                    # No more active pages with required steps, stop turning.
-                    self.log.debug("No more active pages with steps found. Finishing recipe.")
-                    break
+            if i < last_page_index:
+                self.log.info(f"Turning page...")
+                press_key(self.page_turn_key)
+                pyautogui.sleep(self.page_delay)
+
         
         # Process extra steps after handling all normal pages
-        # TODO refactor to remove extra ingredient panel capture where not needed
-        extra_steps = recipe_data[3]
-        if extra_steps and not special_case:
-            self.log.info("Processing extra steps...")
-            self._process_page(extra_steps)
+        # extra_steps = recipe_data[3]
+        # if extra_steps and not special_case:
+        #     self.log.info("Processing extra steps...")
+        #     self._process_page(extra_steps)
 
         self._serve_order()
 
