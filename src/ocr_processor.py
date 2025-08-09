@@ -170,7 +170,7 @@ class OcrProcessor:
             return final_structure
 
         extra_image = panel_image_hsv[extra_top:extra_bottom, :]
-        extra_image = ImagePreprocessor.mask_by_coloured_text(extra_image, 50, 200)
+        extra_image = ImagePreprocessor.mask_by_coloured_text(extra_image, 38, 200)
 
         scale_factor = self.config_manager.get_setting("bot_settings.ocr_upscale_factor", default=1.0)
         upscaled_image = ImagePreprocessor.upscale(extra_image, scale_factor)

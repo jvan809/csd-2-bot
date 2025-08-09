@@ -80,8 +80,6 @@ class CSD2Bot:
 
     def _process_page(self, required_steps: list):
         """Processes a single page of ingredients."""
-        if not required_steps:
-            return False
 
         self.log.info(f"Processing steps for current page: {required_steps}")
         available_on_page = self.ocr.process_ingredient_panel_roi(self.panel_roi, self.ingredient_slots)
@@ -165,6 +163,10 @@ class CSD2Bot:
         
         # Check if OCR returned anything meaningful
         if not any(recipe_data):
+            special_case = self._process_page([])
+            if special_case:
+                self._serve_order()
+                return
             self.log.warning("Recipe card detected, but failed to read any recipe text. Skipping this attempt.")
             pyautogui.sleep(self.loop_delay)
             return
@@ -178,7 +180,8 @@ class CSD2Bot:
 
 
         for i, page_steps in enumerate(recipe_data): 
-            special_case = self._process_page(page_steps)
+            if page_steps:
+                special_case = self._process_page(page_steps)
             if special_case:
                 break
 
@@ -186,13 +189,6 @@ class CSD2Bot:
                 self.log.info(f"Turning page...")
                 press_key(self.page_turn_key)
                 pyautogui.sleep(self.page_delay)
-
-        
-        # Process extra steps after handling all normal pages
-        # extra_steps = recipe_data[3]
-        # if extra_steps and not special_case:
-        #     self.log.info("Processing extra steps...")
-        #     self._process_page(extra_steps)
 
         self._serve_order()
 
