@@ -100,6 +100,8 @@ class OcrProcessor:
         except Exception as e:
             log.error(f"Could not save failing OCR image to {filename}. Error: {e}")
 
+
+
     def process_recipe_list_roi(self, roi: dict) -> List[List[str]]:
         """
         Captures and OCRs the recipe list region, sorting steps by page color.
@@ -167,7 +169,9 @@ class OcrProcessor:
             log.error("Setup determination of recipe panel Failed. Please Rerun setup.py")
             return final_structure
 
-        extra_image = panel_image_bgr[extra_top:extra_bottom, :]
+        extra_image = panel_image_hsv[extra_top:extra_bottom, :]
+        extra_image = ImagePreprocessor.mask_by_coloured_text(extra_image, 50, 200)
+
         scale_factor = self.config_manager.get_setting("bot_settings.ocr_upscale_factor", default=1.0)
         upscaled_image = ImagePreprocessor.upscale(extra_image, scale_factor)
         processed_image = ImagePreprocessor.binarize(upscaled_image, invert_colors=True)

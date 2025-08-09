@@ -74,3 +74,39 @@ class ImagePreprocessor:
         height = int(image.shape[0] * scale_factor)
         return cv2.resize(image, (width, height), interpolation=cv2.INTER_CUBIC)
 
+    @staticmethod
+    def mask_by_coloured_text(hsv_image: np.ndarray, saturation_threshold: int, value_threshold: int) -> np.ndarray:
+        """
+        Creates a binary mask from an HSV image to isolate bright, colored text.
+
+        Pixels with saturation > saturation_threshold AND value > value_threshold
+        will be white, others will be black. This is effective for isolating
+        colored text from grey backgrounds and dark shadows.
+
+        Args:
+            hsv_image: The input image in HSV format.
+            saturation_threshold: The saturation threshold (0-255).
+            value_threshold: The value (brightness) threshold (0-255).
+
+        Returns:
+            A combined binary mask (np.ndarray).
+        """
+        if hsv_image is None or len(hsv_image.shape) != 3 or hsv_image.shape[2] != 3:
+            log.error("Invalid HSV image provided for colored text mask creation.")
+            # Return an empty mask of the correct type to avoid downstream errors
+            return np.zeros((0, 0), dtype=np.uint8)
+
+        # Create a mask for pixels with sufficient saturation (color)
+        saturation_channel = hsv_image[:, :, 1]
+        _, saturation_mask = cv2.threshold(saturation_channel, saturation_threshold, 255, cv2.THRESH_BINARY)
+
+        # Create a mask for pixels with sufficient value (brightness) to remove shadows
+        value_channel = hsv_image[:, :, 2]
+        _, value_mask = cv2.threshold(value_channel, value_threshold, 255, cv2.THRESH_BINARY)
+
+        # Combine the masks: a pixel must be both saturated AND bright
+        combined_mask = cv2.bitwise_and(saturation_mask, value_mask)
+
+        log.debug(f"Created colored text mask with sat_thresh={saturation_threshold}, val_thresh={value_threshold}.")
+
+        return combined_mask

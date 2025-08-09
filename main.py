@@ -81,11 +81,13 @@ class CSD2Bot:
     def _process_page(self, required_steps: list):
         """Processes a single page of ingredients."""
         if not required_steps:
-            return
+            return False
 
         self.log.info(f"Processing steps for current page: {required_steps}")
         available_on_page = self.ocr.process_ingredient_panel_roi(self.panel_roi, self.ingredient_slots)
         self.log.info(f"Available on page: {available_on_page}")
+        if not available_on_page:
+            return False
 
         if 'Sanitize' in available_on_page:
             self.log.info("Special Case: Chores")
@@ -105,7 +107,7 @@ class CSD2Bot:
 
             return True
 
-        if "Pour" in available_on_page[0]:
+        if available_on_page and "Pour" in available_on_page[0]:
             self.log.info("Special Case: Beer")
             hold_key(self.input_keys[0], 1.0)
             return True
@@ -168,10 +170,6 @@ class CSD2Bot:
             return
         
         self.log.debug(f"Raw Recipe Data: {recipe_data}")
-        
-        if recipe_data[3] and len(recipe_data[3][0]) < 10:
-            self.log.info("Extra step string too short, assuming this is an ocr error")
-            recipe_data[3] = []
 
         recipe_data, last_page_index = self._consolidate_recipe_pages(recipe_data)
 
