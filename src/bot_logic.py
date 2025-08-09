@@ -96,6 +96,24 @@ def _find_best_match(target: str, options: List[str]) -> dict | None:
 
     return best_match_details
 
+def split_extra_field(extra_field: List[str]):
+    if not extra_field:
+        return []
+    
+    expanded_steps = []
+    # Keep parentheses for number parsing, split on other non-alphanumeric chars
+    pattern_to_split = r'[^\d\sA-Za-z()]| and '
+
+    for text_section in extra_field:
+        if re.search(pattern_to_split, text_section):
+            sub_steps = [s.strip() for s in re.split(pattern_to_split, text_section)]
+            expanded_steps.extend([step for step in sub_steps if step])
+        else:
+            expanded_steps.append(text_section)
+
+    return expanded_steps
+
+
 
 def fuzzy_map_ingredients_to_keys(
     required_steps: List[str],
@@ -119,26 +137,11 @@ def fuzzy_map_ingredients_to_keys(
     Returns:
         A list of keys to press.
     """
-    multi_step_threshold = config.get('multi_step_char_threshold', 20)
     match_threshold = config.get('fuzzy_match_threshold', 0.6)
-
-    # 1. Expand multi-step instructions into individual, trackable steps.
-    expanded_steps = []
-    # Keep parentheses for number parsing, split on other non-alphanumeric chars
-    pattern_to_split = r'[^\d\sA-Za-z()]| and '
-    for i, step in enumerate(required_steps):
-        # Check if a step is long and contains separators, indicating a multi-step instruction.
-        if len(step) > multi_step_threshold and re.search(pattern_to_split, step):
-            sub_steps = [s.strip() for s in re.split(pattern_to_split, step)]
-            for sub_step in sub_steps:
-                if sub_step:
-                    expanded_steps.append(sub_step)
-        elif step:
-            expanded_steps.append(step)
 
     # 2. Parse each step for its action and count, then find the best match.
     all_matches = []
-    for step_text in expanded_steps:
+    for step_text in required_steps:
         action, count = _parse_step_for_action_and_count(step_text)
         best_match = _find_best_match(action, available_on_page)
         if best_match and best_match['score'] >= match_threshold:

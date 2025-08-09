@@ -6,7 +6,7 @@ from src.logger_setup import setup_logger
 from src.config_manager import ConfigManager
 from src.input_handler import press_key, hold_key
 from src.ocr_processor import OcrProcessor
-from src.bot_logic import fuzzy_map_ingredients_to_keys
+from src.bot_logic import fuzzy_map_ingredients_to_keys, split_extra_field
 from src.screen_capture import capture_region
 
 class CSD2Bot:
@@ -170,6 +170,7 @@ class CSD2Bot:
             return
         
         self.log.debug(f"Raw Recipe Data: {recipe_data}")
+        recipe_data[3] = split_extra_field(recipe_data[3])
 
         recipe_data, last_page_index = self._consolidate_recipe_pages(recipe_data)
 
