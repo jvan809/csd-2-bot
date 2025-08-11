@@ -28,7 +28,7 @@ def _parse_step_for_action_and_count(step: str) -> Tuple[str, int]:
     # Case 2: "Cut eight times" or "Roll twice"
     step_lower = step.lower()
     # Anchors the match to the end of the string for reliability
-    number_word_pattern = r'\b(' + '|'.join(NUMBER_WORDS.keys()) + r')\b(?:\s+times)?$'
+    number_word_pattern = r'\b(' + '|'.join(NUMBER_WORDS.keys()) + r')\b(?:\s+times)?\.?$'
     text_match = re.search(number_word_pattern, step_lower)
     if text_match:
         number_word = text_match.group(1)
@@ -102,7 +102,7 @@ def split_extra_field(extra_field: List[str]):
     
     expanded_steps = []
     # Keep parentheses for number parsing, split on other non-alphanumeric chars
-    pattern_to_split = r'[^\d\sA-Za-z()]| and '
+    pattern_to_split = r'[\.,] | and '
 
     for text_section in extra_field:
         if re.search(pattern_to_split, text_section):

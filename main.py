@@ -110,6 +110,11 @@ class CSD2Bot:
             hold_key(self.input_keys[0], 1.0)
             return True
 
+        if available_on_page and "Open Basin" in available_on_page[0]:
+            self.log.info("Special Case: Soda Dispenser")
+            keys_to_press = self.input_keys[:3]
+            press_key(keys_to_press)
+            return True
         
 
         keys_to_press = fuzzy_map_ingredients_to_keys(required_steps, available_on_page, self.input_keys, self.fuzzy_matching_config)
