@@ -187,8 +187,8 @@ class CSD2Bot:
         for i, page_steps in enumerate(recipe_data): 
             if page_steps:
                 special_case = self._process_page(page_steps)
-            if special_case:
-                break
+                if special_case:
+                    break
 
             if i < last_page_index:
                 self.log.info(f"Turning page...")
