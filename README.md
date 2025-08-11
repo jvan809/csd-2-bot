@@ -1,14 +1,7 @@
 # CSD2 Bot
 
-This project is a Python-based bot for the game "Cook, Serve, Delicious! 2!!" that automates gameplay by reading recipes from the screen and emulating keyboard inputs.
-Currently the bot only activates when there is a recipe on screen, and does not do choose which foods to make. 
-
-## Features
-
-- **Screen Reading**: Uses Tesseract OCR to read recipe and ingredient text from the game window.
-- **Keyboard Emulation**: Simulates key presses to prepare food.
-- **Dynamic Calibration**: A setup script automatically finds the game's UI elements to work with different window sizes and resolutions.
-- **Failsafe**: Bot only presses keys - no mouse movement. Pyautogui failsafe doesn't seem to work
+This project is a Python-based bot for the game "Cook, Serve, Delicious! 2!!" that uses pytesseract to read recipe steps and ingredients, and pydirectinput to emulate key presses to complete and serve orders. 
+Currently, the bot only activates when there is a recipe on screen, and does not choose which foods to make. 
 
 ## Installation
 
@@ -56,3 +49,7 @@ Once calibration is complete, you can run the bot.
 ## Logging
 
 The bot's activity, including recognized recipes, actions taken, and any errors, is logged to `bot_activity.log`. Logging level can be adjusted in the config.
+
+## Known Issues
+- The OCR is not perfect and will occassionaly cause incorrect inputs (e.g. Burgers)
+- Extra Steps are assumed to always relate to the last available page, but this is not always true (e.g. Beef Wellington, Steamed Momos)
