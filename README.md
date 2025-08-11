@@ -14,6 +14,8 @@ I haven't actually tried this on any other machine - May or may not work.
     - Download the installer from the [Tesseract at UB Mannheim](https://github.com/UB-Mannheim/tesseract/wiki) page.
     - During installation, note the installation path (e.g., `C:\Program Files\Tesseract-OCR`). You will need this path.
     - **Important**: You must add the Tesseract installation directory to your system's `PATH` environment variable.
+- All required packages are contained in requirements.txt
+
 
 ### 2. Project Setup
 
