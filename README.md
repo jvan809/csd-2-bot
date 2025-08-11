@@ -1,19 +1,18 @@
-# CSD2 Bot - MVP
+# CSD2 Bot
 
 This project is a Python-based bot for the game "Cook, Serve, Delicious! 2!!" that automates gameplay by reading recipes from the screen and emulating keyboard inputs.
-
-This MVP focuses on reading a single active recipe and executing its steps.
+Currently the bot only activates when there is a recipe on screen, and does not do choose which foods to make. 
 
 ## Features
 
 - **Screen Reading**: Uses Tesseract OCR to read recipe and ingredient text from the game window.
-- **Dynamic Calibration**: A setup script automatically finds the game's UI elements to work with different window sizes and resolutions.
 - **Keyboard Emulation**: Simulates key presses to prepare food.
-- **Failsafe**: Move the mouse to the top-left corner of the screen to immediately stop the bot.
+- **Dynamic Calibration**: A setup script automatically finds the game's UI elements to work with different window sizes and resolutions.
+- **Failsafe**: Bot only presses keys - no mouse movement. Pyautogui failsafe doesn't seem to work
 
 ## Installation
 
-Follow these steps to set up the bot on your Windows machine.
+I haven't actually tried this on any other machine - May or may not work. 
 
 ### 1. Prerequisites
 
@@ -37,34 +36,22 @@ Follow these steps to set up the bot on your Windows machine.
     ```
 
 3.  **Configure the bot:**
+    Before running the bot for the first time, you must run the calibration script.
+    1. Launch the game and get to food catalog prep of sashimi
+    2. Run setup.py
+    3. Follow instructions in terminal and on top left of screenshots
+
     - A `config.json` file will be created automatically on first run.
     - If Tesseract was not installed to the default location, open `config.json` and update the `tesseract_path` to point to your `tesseract.exe`.
 
 ## Usage
 
-### 1. One-Time Calibration
-
-Before running the bot for the first time, you must run the calibration script.
-
-1.  Launch "Cook, Serve, Delicious! 2!!".
-2.  Ensure the game window is visible on your screen.
-3.  Run the setup script from your terminal:
-    ```sh
-    python setup.py
-    ```
-    This will find the necessary UI elements on the screen and save their coordinates to `config.json`.
-
-### 2. Running the Bot
-
 Once calibration is complete, you can run the bot.
 
 1.  Launch the game.
-2.  Run the main script:
-    ```sh
-    python main.py
-    ```
-3.  The bot will now be active. To stop it, either press `Ctrl+C` in the terminal or move your mouse to the top-left corner of the screen.
+2.  Run main.py
+3.  The bot should post in the terminal that it is active. To stop it, press `Ctrl+C` in the terminal
 
 ## Logging
 
-The bot's activity, including recognized recipes, actions taken, and any errors, is logged to `bot_activity.log`.
+The bot's activity, including recognized recipes, actions taken, and any errors, is logged to `bot_activity.log`. Logging level can be adjusted in the config.
