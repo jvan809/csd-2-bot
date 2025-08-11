@@ -37,9 +37,10 @@ I haven't actually tried this on any other machine - May or may not work.
 
 3.  **Configure the bot:**
     Before running the bot for the first time, you must run the calibration script.
-    1. Launch the game and get to food catalog prep of sashimi
-    2. Run setup.py
-    3. Follow instructions in terminal and on top left of screenshots
+    1. Launch the game
+    2. In Options > Gameplay, Turn ON large ingredient font. 
+    3. Run setup.py
+    4. Follow instructions in terminal and on top left of screenshots
 
     - A `config.json` file will be created automatically on first run.
     - If Tesseract was not installed to the default location, open `config.json` and update the `tesseract_path` to point to your `tesseract.exe`.
